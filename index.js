@@ -3,10 +3,10 @@ const { Telegraf } = require('telegraf');
 const { Pool } = require('pg');
 const User = require('./models');
 
-const bot = new Telegraf('7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw');
+const bot = new Telegraf(process.env.BOT_TOKEN || '7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw');
 const app = express();
 const pool = new Pool({
-  connectionString: 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3'
+  connectionString: process.env.DATABASE_URL || 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3'
 });
 
 app.use(express.json());
@@ -81,10 +81,20 @@ bot.on('text', async (ctx) => {
   }
 });
 
-bot.launch();
+bot.launch().then(() => {
+  console.log('Bot started successfully');
+});
 
 // Setup Express server to handle webhook
-app.listen(3000, () => {
-  console.log('Server is running on port 3000');
-  bot.telegram.setWebhook(`${process.env.URL}/webhook`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, async () => {
+  console.log(`Server is running on port ${PORT}`);
+
+  const webhookUrl = `${process.env.URL}/webhook`;
+  try {
+    await bot.telegram.setWebhook(webhookUrl);
+    console.log(`Webhook set to ${webhookUrl}`);
+  } catch (error) {
+    console.error('Error setting webhook:', error);
+  }
 });
