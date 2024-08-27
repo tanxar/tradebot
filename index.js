@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
-const { User } = require('./models');
+const { User, sequelize } = require('./models'); // Import sequelize instance for migrations if necessary
 
 const token = '7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw'; // Replace with your actual token
 const bot = new TelegramBot(token, { polling: false });
@@ -72,14 +72,19 @@ bot.on('message', async (msg) => {
   const currentStep = userState[chatId].step;
 
   if (currentStep === 'awaiting_username') {
-    const userExists = await User.findOne({ where: { username: text } });
+    try {
+      const userExists = await User.findOne({ where: { username: text } });
 
-    if (userExists) {
-      bot.sendMessage(chatId, "This username is already taken. Please choose another one.");
-    } else {
-      userState[chatId].username = text;
-      userState[chatId].step = 'awaiting_password';
-      bot.sendMessage(chatId, "Choose a password for your account:");
+      if (userExists) {
+        bot.sendMessage(chatId, "This username is already taken. Please choose another one.");
+      } else {
+        userState[chatId].username = text;
+        userState[chatId].step = 'awaiting_password';
+        bot.sendMessage(chatId, "Choose a password for your account:");
+      }
+    } catch (error) {
+      console.error("Error checking username:", error);
+      bot.sendMessage(chatId, "An error occurred while checking the username. Please try again.");
     }
   } else if (currentStep === 'awaiting_password') {
     const username = userState[chatId].username;
@@ -87,7 +92,7 @@ bot.on('message', async (msg) => {
     try {
       const newUser = await User.create({ username, password: text, balance: 0 });
       bot.sendMessage(chatId, `Account created! Username: ${username}\nYour balance: $${newUser.balance}`);
-      
+
       const options = {
         reply_markup: {
           inline_keyboard: [
@@ -99,30 +104,36 @@ bot.on('message', async (msg) => {
 
       bot.sendMessage(chatId, `Your balance: $${newUser.balance}`, options);
     } catch (error) {
+      console.error("Error creating user:", error);
       bot.sendMessage(chatId, "An error occurred while creating your account. Please try again.");
     }
 
     delete userState[chatId];
   } else if (currentStep === 'awaiting_login_username') {
-    const user = await User.findOne({ where: { username: text } });
+    try {
+      const user = await User.findOne({ where: { username: text } });
 
-    if (user) {
-      userState[chatId] = { username: text, step: 'logged_in' };
-      const options = {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'Add Funds', callback_data: 'add_funds' }],
-            [{ text: 'Withdraw', callback_data: 'withdraw' }]
-          ]
-        }
-      };
+      if (user) {
+        userState[chatId] = { username: text, step: 'logged_in' };
+        const options = {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Add Funds', callback_data: 'add_funds' }],
+              [{ text: 'Withdraw', callback_data: 'withdraw' }]
+            ]
+          }
+        };
 
-      bot.sendMessage(chatId, `Login successful!\nYour balance: $${user.balance}`, options);
-    } else {
-      bot.sendMessage(chatId, `Username "${text}" not found. Please try again.`);
-      
-      // Reset the state to allow the user to enter a username again
-      userState[chatId].step = 'awaiting_login_username';
+        bot.sendMessage(chatId, `Login successful!\nYour balance: $${user.balance}`, options);
+      } else {
+        bot.sendMessage(chatId, `Username "${text}" not found. Please try again.`);
+
+        // Reset the state to allow the user to enter a username again
+        userState[chatId].step = 'awaiting_login_username';
+      }
+    } catch (error) {
+      console.error("Error logging in:", error);
+      bot.sendMessage(chatId, "An error occurred while logging in. Please try again.");
     }
   }
 });
