@@ -118,8 +118,11 @@ bot.on('message', async (msg) => {
 
       bot.sendMessage(chatId, `Login successful!\nYour balance: $${user.balance}`, options);
     } else {
+      // Inform the user that the username was not found and prompt again
       bot.sendMessage(chatId, "Username not found. Please try again.");
-      delete userState[chatId];
+      
+      // Reset the state to allow the user to enter a username again
+      userState[chatId].step = 'awaiting_login_username';
     }
   }
 });
