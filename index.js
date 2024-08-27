@@ -1,37 +1,32 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
+const { User } = require('./models');  // Εισαγωγή του μοντέλου χρήστη
 
-// Χρησιμοποίησε το token που ανέφερες
 const token = '7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw';
 const bot = new TelegramBot(token);
 
-// Δημιουργία του express app
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware για body parsing
 app.use(bodyParser.json());
 
-// Ρύθμιση webhook
-const url = 'https://tradebot-5390.onrender.com';  // Το URL της εφαρμογής σου στο Render
+const url = 'https://tradebot-5390.onrender.com';  
 const webhookPath = `/bot${token}`;
 
-// Ρύθμιση του Telegram webhook
 bot.setWebHook(`${url}${webhookPath}`);
 
-// Διαχείριση αιτημάτων από το Telegram
 app.post(webhookPath, (req, res) => {
   bot.processUpdate(req.body);
   res.sendStatus(200);
 });
 
-// Route για το root path "/"
 app.get('/', (req, res) => {
   res.send('Hello World');
 });
 
-// Αρχικό μήνυμα με δύο κουμπιά όταν ο χρήστης στέλνει /start
+const userState = {};
+
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
 
@@ -47,20 +42,52 @@ bot.onText(/\/start/, (msg) => {
   bot.sendMessage(chatId, "Welcome to tsourbot. This bot generates profit based on user capital. The bot takes 50% of the profits it creates for you.", options);
 });
 
-// Διαχείριση των απαντήσεων στα κουμπιά
-bot.on('callback_query', (callbackQuery) => {
-  const message = callbackQuery.message;
-  const chatId = message.chat.id;
+bot.on('callback_query', async (callbackQuery) => {
+  const chatId = callbackQuery.message.chat.id;
   const action = callbackQuery.data;
 
   if (action === 'new_account') {
-    bot.sendMessage(chatId, "You chose to create a new account.");
+    userState[chatId] = { step: 'awaiting_username' };
+    bot.sendMessage(chatId, "Choose a username:");
   } else if (action === 'login') {
-    bot.sendMessage(chatId, "You chose to log in.");
+    bot.sendMessage(chatId, "Login functionality not implemented yet.");
   }
 });
 
-// Εκκίνηση του server
+bot.on('message', async (msg) => {
+  const chatId = msg.chat.id;
+  const text = msg.text;
+
+  if (!userState[chatId]) {
+    return;
+  }
+
+  const currentStep = userState[chatId].step;
+
+  if (currentStep === 'awaiting_username') {
+    const userExists = await User.findOne({ where: { username: text } });
+
+    if (userExists) {
+      bot.sendMessage(chatId, "This username is already taken. Please choose another one.");
+    } else {
+      userState[chatId].username = text;
+      userState[chatId].step = 'awaiting_password';
+      bot.sendMessage(chatId, "Choose a password for your account:");
+    }
+  } else if (currentStep === 'awaiting_password') {
+    const username = userState[chatId].username;
+
+    try {
+      await User.create({ username, password: text });
+      bot.sendMessage(chatId, `Account created! Username: ${username}`);
+    } catch (error) {
+      bot.sendMessage(chatId, "An error occurred while creating your account. Please try again.");
+    }
+
+    delete userState[chatId];
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
