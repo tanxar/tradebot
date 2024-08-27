@@ -3,17 +3,18 @@ const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
 const { User } = require('./models');
 
-const token = '7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw';
+const token = '7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw'; // Replace with your actual token
 const bot = new TelegramBot(token);
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Middleware
 app.use(bodyParser.json());
 
-const url = 'https://tradebot-5390.onrender.com';  
+// Set up webhook
+const url = 'https://tradebot-5390.onrender.com';  // Replace with your actual URL
 const webhookPath = `/bot${token}`;
-
 bot.setWebHook(`${url}${webhookPath}`);
 
 app.post(webhookPath, (req, res) => {
@@ -25,6 +26,7 @@ app.get('/', (req, res) => {
   res.send('Hello World');
 });
 
+// User state management
 const userState = {};
 
 bot.onText(/\/start/, (msg) => {
@@ -83,10 +85,9 @@ bot.on('message', async (msg) => {
     const username = userState[chatId].username;
 
     try {
-      const newUser = await User.create({ username, password: text });
+      const newUser = await User.create({ username, password: text, balance: 0 });
       bot.sendMessage(chatId, `Account created! Username: ${username}\nYour balance: $${newUser.balance}`);
       
-      // Show balance and options to Add Funds or Withdraw
       const options = {
         reply_markup: {
           inline_keyboard: [
@@ -118,7 +119,6 @@ bot.on('message', async (msg) => {
 
       bot.sendMessage(chatId, `Login successful!\nYour balance: $${user.balance}`, options);
     } else {
-      // Inform the user that the username was not found and prompt again
       bot.sendMessage(chatId, `Username "${text}" not found. Please try again.`);
       
       // Reset the state to allow the user to enter a username again
