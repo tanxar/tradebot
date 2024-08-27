@@ -2,7 +2,7 @@ const { Telegraf } = require('telegraf');
 const { Pool } = require('pg');
 const express = require('express');
 const bodyParser = require('body-parser');
-const session = require('express-session');
+const session = require('telegraf-session'); // Import telegraf-session
 const { createAccount, checkUsernameExists, verifyLogin } = require('./models');
 
 const bot = new Telegraf('7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw');
@@ -12,11 +12,7 @@ app.use(bot.webhookCallback('/webhook'));
 bot.telegram.setWebhook('https://tradebot-5390.onrender.com/webhook');
 
 // Initialize session middleware
-app.use(session({
-    secret: 'some_secret_key',
-    resave: false,
-    saveUninitialized: true,
-}));
+bot.use(session());
 
 bot.start((ctx) => {
     return ctx.reply('Welcome! Please choose an option:', {
