@@ -6,7 +6,7 @@ const sequelize = new Sequelize('postgresql://users_info_6gu3_user:RFH4r8MZg0bMI
   dialectOptions: {
     ssl: {
       require: true,
-      rejectUnauthorized: false // Απαιτείται για σύνδεση με SSL στο Render.com
+      rejectUnauthorized: false
     }
   }
 });
@@ -20,6 +20,11 @@ const User = sequelize.define('User', {
   password: {
     type: DataTypes.STRING,
     allowNull: false
+  },
+  balance: {
+    type: DataTypes.FLOAT,  // Use FLOAT to store the balance
+    allowNull: false,
+    defaultValue: 0  // Default balance is 0
   }
 });
 
