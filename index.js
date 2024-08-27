@@ -1,14 +1,40 @@
+const express = require('express');
+const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
 
-// Αντικατέστησε το TOKEN με το δικό σου Telegram bot token
+// Χρησιμοποίησε το token που ανέφερες
 const token = '7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw';
-const bot = new TelegramBot(token, { polling: true });
+const bot = new TelegramBot(token);
 
-// Αρχικό μήνυμα με δύο κουμπιά
+// Δημιουργία του express app
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Middleware για body parsing
+app.use(bodyParser.json());
+
+// Ρύθμιση webhook
+const url = 'https://tradebot-5390.onrender.com';  // Το URL της εφαρμογής σου στο Render
+const webhookPath = `/bot${token}`;
+
+// Ρύθμιση του Telegram webhook
+bot.setWebHook(`${url}${webhookPath}`);
+
+// Διαχείριση αιτημάτων από το Telegram
+app.post(webhookPath, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
+
+// Route για το root path "/"
+app.get('/', (req, res) => {
+  res.send('Hello World');
+});
+
+// Αρχικό μήνυμα με δύο κουμπιά όταν ο χρήστης στέλνει /start
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
 
-  // Δημιουργία του μηνύματος με τα κουμπιά
   const options = {
     reply_markup: {
       inline_keyboard: [
@@ -32,4 +58,9 @@ bot.on('callback_query', (callbackQuery) => {
   } else if (action === 'login') {
     bot.sendMessage(chatId, "You chose to log in.");
   }
+});
+
+// Εκκίνηση του server
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
 });
