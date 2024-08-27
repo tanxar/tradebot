@@ -1,8 +1,7 @@
-const { Telegraf } = require('telegraf');
+const { Telegraf, session } = require('telegraf');
 const { Pool } = require('pg');
 const express = require('express');
 const bodyParser = require('body-parser');
-const session = require('telegraf-session'); // Import telegraf-session
 const { createAccount, checkUsernameExists, verifyLogin } = require('./models');
 
 const bot = new Telegraf('7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw');
