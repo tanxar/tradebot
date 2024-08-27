@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
-const { User } = require('./models');  // Εισαγωγή του μοντέλου χρήστη
+const { User } = require('./models');
 
 const token = '7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw';
 const bot = new TelegramBot(token);
@@ -50,7 +50,12 @@ bot.on('callback_query', async (callbackQuery) => {
     userState[chatId] = { step: 'awaiting_username' };
     bot.sendMessage(chatId, "Choose a username:");
   } else if (action === 'login') {
-    bot.sendMessage(chatId, "Login functionality not implemented yet.");
+    userState[chatId] = { step: 'awaiting_login_username' };
+    bot.sendMessage(chatId, "Enter your username:");
+  } else if (action === 'add_funds') {
+    bot.sendMessage(chatId, "Send funds to this address: uygfhvhjvhjvhvgh7646754ftgf (click to copy)");
+  } else if (action === 'withdraw') {
+    bot.sendMessage(chatId, "Withdraw functionality not implemented yet.");
   }
 });
 
@@ -78,13 +83,44 @@ bot.on('message', async (msg) => {
     const username = userState[chatId].username;
 
     try {
-      await User.create({ username, password: text });
-      bot.sendMessage(chatId, `Account created! Username: ${username}`);
+      const newUser = await User.create({ username, password: text });
+      bot.sendMessage(chatId, `Account created! Username: ${username}\nYour balance: $${newUser.balance}`);
+      
+      // Show balance and options to Add Funds or Withdraw
+      const options = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Add Funds', callback_data: 'add_funds' }],
+            [{ text: 'Withdraw', callback_data: 'withdraw' }]
+          ]
+        }
+      };
+
+      bot.sendMessage(chatId, `Your balance: $${newUser.balance}`, options);
     } catch (error) {
       bot.sendMessage(chatId, "An error occurred while creating your account. Please try again.");
     }
 
     delete userState[chatId];
+  } else if (currentStep === 'awaiting_login_username') {
+    const user = await User.findOne({ where: { username: text } });
+
+    if (user) {
+      userState[chatId] = { username: text, step: 'logged_in' };
+      const options = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Add Funds', callback_data: 'add_funds' }],
+            [{ text: 'Withdraw', callback_data: 'withdraw' }]
+          ]
+        }
+      };
+
+      bot.sendMessage(chatId, `Login successful!\nYour balance: $${user.balance}`, options);
+    } else {
+      bot.sendMessage(chatId, "Username not found. Please try again.");
+      delete userState[chatId];
+    }
   }
 });
 
