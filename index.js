@@ -1,15 +1,14 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
-const { User, sequelize } = require('./models'); // Import sequelize instance for migrations if necessary
+const { User } = require('./models'); // Make sure you have this setup
 
-const token = '7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw'; // Replace with your actual token
+const token = '7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw'; // Your actual token
 const bot = new TelegramBot(token, { polling: false });
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware
 app.use(bodyParser.json());
 
 // Set up webhook
@@ -127,12 +126,10 @@ bot.on('message', async (msg) => {
         bot.sendMessage(chatId, `Login successful!\nYour balance: $${user.balance}`, options);
       } else {
         bot.sendMessage(chatId, `Username "${text}" not found. Please try again.`);
-
-        // Reset the state to allow the user to enter a username again
-        userState[chatId].step = 'awaiting_login_username';
+        userState[chatId].step = 'awaiting_login_username';  // Reset state to allow re-entry
       }
     } catch (error) {
-      console.error("Error logging in:", error);
+      console.error("Error checking username:", error);
       bot.sendMessage(chatId, "An error occurred while logging in. Please try again.");
     }
   }
