@@ -1,22 +1,27 @@
-const bcrypt = require('bcrypt');
+const { Sequelize, DataTypes } = require('sequelize');
 
-const User = {
-    async checkUsernameExists(pool, username) {
-        const res = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-        return res.rowCount > 0;
-    },
+const sequelize = new Sequelize('postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3', {
+  dialect: 'postgres',
+  logging: false,
+});
 
-    async createUser(pool, username, password) {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await pool.query('INSERT INTO users (username, password, balance) VALUES ($1, $2, $3)', [username, hashedPassword, 0]);
-    },
-
-    async checkPassword(pool, username, password) {
-        const res = await pool.query('SELECT password FROM users WHERE username = $1', [username]);
-        if (res.rowCount === 0) return false;
-        const user = res.rows[0];
-        return await bcrypt.compare(password, user.password);
-    }
-};
+const User = sequelize.define('User', {
+  username: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true,
+  },
+  password: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  balance: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+}, {
+  tableName: 'users',  // Table name in the database
+  timestamps: false,
+});
 
 module.exports = User;
