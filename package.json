@@ -1,14 +1,17 @@
 {
   "name": "telegram-bot",
   "version": "1.0.0",
-  "description": "A Telegram bot for user account creation and login",
+  "description": "A Telegram bot for creating and logging into accounts.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "bcrypt": "^5.1.0",
-    "pg": "^8.10.0",
-    "telegraf": "^4.10.0"
+    "telegraf": "^4.6.0",
+    "sequelize": "^6.23.0",
+    "pg": "^8.8.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }
