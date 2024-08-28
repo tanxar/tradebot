@@ -9,7 +9,7 @@ const { User } = require('./models');
 const app = express();
 app.use(bodyParser.json());
 
-// Update with the new bot token
+// Initialize bot with the new token
 const bot = new Telegraf('7542765454:AAG4dTJYB7e5N73wCfjtAcwe4bCb6bWiHdM');
 
 bot.start((ctx) => {
@@ -26,18 +26,28 @@ bot.start((ctx) => {
 bot.action('create_account', (ctx) => {
   ctx.reply('Choose a username:');
   bot.on('text', async (ctx) => {
-    const username = ctx.message.text;
-    const user = await User.findOne({ where: { username } });
+    try {
+      const username = ctx.message.text;
+      const user = await User.findOne({ where: { username } });
 
-    if (user) {
-      ctx.reply('Username taken. Please choose another username.');
-    } else {
-      ctx.reply('Username available. Please choose a password:');
-      bot.once('text', async (ctx) => {
-        const password = ctx.message.text;
-        await User.create({ username, password });
-        ctx.reply('Account created successfully!');
-      });
+      if (user) {
+        ctx.reply('Username taken. Please choose another username.');
+      } else {
+        ctx.reply('Username available. Please choose a password:');
+        bot.once('text', async (ctx) => {
+          try {
+            const password = ctx.message.text;
+            await User.create({ username, password });
+            ctx.reply('Account created successfully!');
+          } catch (error) {
+            console.error('Error creating user:', error);
+            ctx.reply('An error occurred while creating your account. Please try again.');
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error checking username:', error);
+      ctx.reply('An error occurred. Please try again.');
     }
   });
 });
@@ -45,21 +55,31 @@ bot.action('create_account', (ctx) => {
 bot.action('login', (ctx) => {
   ctx.reply('Enter your username:');
   bot.on('text', async (ctx) => {
-    const username = ctx.message.text;
-    const user = await User.findOne({ where: { username } });
+    try {
+      const username = ctx.message.text;
+      const user = await User.findOne({ where: { username } });
 
-    if (!user) {
-      ctx.reply('Username does not exist. Please try again.');
-    } else {
-      ctx.reply('Enter your password:');
-      bot.once('text', (ctx) => {
-        const password = ctx.message.text;
-        if (password === user.password) {
-          ctx.reply('Login successful!');
-        } else {
-          ctx.reply('Username or password not correct. Please try again.');
-        }
-      });
+      if (!user) {
+        ctx.reply('Username does not exist. Please try again.');
+      } else {
+        ctx.reply('Enter your password:');
+        bot.once('text', async (ctx) => {
+          try {
+            const password = ctx.message.text;
+            if (password === user.password) {
+              ctx.reply('Login successful!');
+            } else {
+              ctx.reply('Username or password not correct. Please try again.');
+            }
+          } catch (error) {
+            console.error('Error checking password:', error);
+            ctx.reply('An error occurred. Please try again.');
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error checking username during login:', error);
+      ctx.reply('An error occurred. Please try again.');
     }
   });
 });
