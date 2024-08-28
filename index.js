@@ -1,22 +1,39 @@
 const { Telegraf } = require('telegraf');
-const { Sequelize } = require('sequelize');
-const User = require('./models');
+const { Sequelize, DataTypes } = require('sequelize');
+const express = require('express');
+const bodyParser = require('body-parser');
 
-// Initialize bot with your API token
+// Initialize Express
+const app = express();
+app.use(bodyParser.json());
+
 const bot = new Telegraf('7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw');
 
-// PostgreSQL connection using Sequelize
+// Set up PostgreSQL connection
 const sequelize = new Sequelize('postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3', {
   dialect: 'postgres',
-  logging: false,
 });
 
-// Ensure the User model is synced with the database
-sequelize.sync();
+const User = sequelize.define('User', {
+  username: {
+    type: DataTypes.STRING,
+    unique: true,
+    allowNull: false,
+  },
+  password: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  balance: {
+    type: DataTypes.FLOAT,
+    defaultValue: 0.0,
+  },
+});
 
-// Start command - Shows Create Account and Login buttons
+sequelize.sync(); // Sync models with database
+
 bot.start((ctx) => {
-  ctx.reply('Welcome! Please choose an option:', {
+  ctx.reply('Welcome! What would you like to do?', {
     reply_markup: {
       inline_keyboard: [
         [{ text: 'Create Account', callback_data: 'create_account' }],
@@ -26,7 +43,6 @@ bot.start((ctx) => {
   });
 });
 
-// Create Account Process
 bot.action('create_account', (ctx) => {
   ctx.reply('Choose a username:');
   bot.on('text', async (ctx) => {
@@ -34,22 +50,18 @@ bot.action('create_account', (ctx) => {
     const user = await User.findOne({ where: { username } });
 
     if (user) {
-      ctx.reply('Username taken, please choose another:');
+      ctx.reply('Username taken. Please choose another username.');
     } else {
-      ctx.session.username = username;
-      ctx.reply('Choose a password:');
-      bot.on('text', async (ctx) => {
+      ctx.reply('Username available. Please choose a password:');
+      bot.once('text', async (ctx) => {
         const password = ctx.message.text;
-        await User.create({ username: ctx.session.username, password, balance: 0 });
+        await User.create({ username, password });
         ctx.reply('Account created successfully!');
-        ctx.session = null;  // Clear session
-        bot.removeTextListener();  // Remove text listener to prevent issues
       });
     }
   });
 });
 
-// Login Process
 bot.action('login', (ctx) => {
   ctx.reply('Enter your username:');
   bot.on('text', async (ctx) => {
@@ -57,31 +69,29 @@ bot.action('login', (ctx) => {
     const user = await User.findOne({ where: { username } });
 
     if (!user) {
-      ctx.reply('Username does not exist. Please enter again:');
+      ctx.reply('Username does not exist. Please try again.');
     } else {
-      ctx.session.username = username;
       ctx.reply('Enter your password:');
-      bot.on('text', (ctx) => {
+      bot.once('text', (ctx) => {
         const password = ctx.message.text;
-
-        if (user.password !== password) {
-          ctx.reply('Username or password not correct. Please try again.');
-          ctx.session = null;
-          bot.removeTextListener();
-          ctx.scene.enter('login');  // Restart login process
+        if (password === user.password) {
+          ctx.reply('Login successful!');
         } else {
-          ctx.reply('Logged in successfully!');
-          ctx.session = null;  // Clear session
-          bot.removeTextListener();  // Remove text listener to prevent issues
+          ctx.reply('Username or password not correct. Please try again.');
         }
       });
     }
   });
 });
 
-// Start the bot
-bot.launch();
+// Set webhook
+app.post('/webhook', (req, res) => {
+  bot.handleUpdate(req.body);
+  res.sendStatus(200);
+});
 
-// Graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+app.listen(3000, () => {
+  console.log('Server is running on port 3000');
+});
+
+bot.telegram.setWebhook('https://tradebot-5390.onrender.com/webhook');
