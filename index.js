@@ -1,36 +1,15 @@
 const { Telegraf } = require('telegraf');
-const { Sequelize, DataTypes } = require('sequelize');
 const express = require('express');
 const bodyParser = require('body-parser');
+
+// Import the User model from models.js
+const { User } = require('./models');
 
 // Initialize Express
 const app = express();
 app.use(bodyParser.json());
 
 const bot = new Telegraf('7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw');
-
-// Set up PostgreSQL connection
-const sequelize = new Sequelize('postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3', {
-  dialect: 'postgres',
-});
-
-const User = sequelize.define('User', {
-  username: {
-    type: DataTypes.STRING,
-    unique: true,
-    allowNull: false,
-  },
-  password: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  balance: {
-    type: DataTypes.FLOAT,
-    defaultValue: 0.0,
-  },
-});
-
-sequelize.sync(); // Sync models with database
 
 bot.start((ctx) => {
   ctx.reply('Welcome! What would you like to do?', {
