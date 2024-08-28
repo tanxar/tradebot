@@ -2,9 +2,10 @@ const { Telegraf } = require('telegraf');
 const { Pool } = require('pg');
 const User = require('./models');
 
+// Initialize the Telegram bot with your API token
 const bot = new Telegraf('7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw');
 
-// PostgreSQL client setup
+// PostgreSQL client setup with your provided URL
 const pool = new Pool({
     connectionString: 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3'
 });
@@ -20,7 +21,7 @@ bot.start(async (ctx) => {
     });
 });
 
-// Handle button clicks
+// Handle "Create Account" process
 bot.action('create_account', async (ctx) => {
     ctx.reply('Choose a username:');
     bot.on('text', async (ctx) => {
@@ -39,6 +40,7 @@ bot.action('create_account', async (ctx) => {
     });
 });
 
+// Handle "Login" process
 bot.action('login', async (ctx) => {
     ctx.reply('Enter your username:');
     bot.on('text', async (ctx) => {
