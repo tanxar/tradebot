@@ -9,7 +9,8 @@ const { User } = require('./models');
 const app = express();
 app.use(bodyParser.json());
 
-const bot = new Telegraf('7342846547:AAE4mQ4OiMmEyYYwc8SPbN1u3Cf2idfCcxw');
+// Update with the new bot token
+const bot = new Telegraf('7542765454:AAG4dTJYB7e5N73wCfjtAcwe4bCb6bWiHdM');
 
 bot.start((ctx) => {
   ctx.reply('Welcome! What would you like to do?', {
