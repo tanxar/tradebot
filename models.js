@@ -1,10 +1,11 @@
 const { Sequelize, DataTypes } = require('sequelize');
 
-// Set up PostgreSQL connection
+// Initialize Sequelize with the database connection
 const sequelize = new Sequelize('postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3', {
   dialect: 'postgres',
 });
 
+// Define the User model
 const User = sequelize.define('User', {
   username: {
     type: DataTypes.STRING,
@@ -17,13 +18,13 @@ const User = sequelize.define('User', {
   },
   balance: {
     type: DataTypes.FLOAT,
-    defaultValue: 0.0,
+    defaultValue: 0.0, // Default balance for new users
   },
 });
 
-sequelize.sync();
+// Sync the model with the database
+sequelize.sync({ alter: true }) // 'alter' adjusts the schema to match the model
+  .then(() => console.log('Database synced'))
+  .catch(err => console.error('Error syncing database:', err));
 
-module.exports = {
-  sequelize,
-  User,
-};
+module.exports = { User, sequelize };
