@@ -11,7 +11,7 @@
     "express": "^4.18.2",
     "sequelize": "^6.32.0",
     "pg": "^8.7.1",
-    "pg-hstore": "^2.3.5",
+    "pg-hstore": "^2.3.4",
     "telegraf": "^4.12.1",
     "body-parser": "^1.20.1"
   },
