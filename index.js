@@ -1,124 +1,92 @@
 const { Telegraf } = require('telegraf');
-const express = require('express');
-const bodyParser = require('body-parser');
-const { User } = require('./models');
+const { Pool } = require('pg');
+const fetch = require('node-fetch');
 
-// Initialize Express
-const app = express();
-app.use(bodyParser.json());
+// Telegram Bot Token
+const BOT_TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
+const WEBHOOK_URL = 'https://pythontestbot-f4g1.onrender.com';
 
-// Initialize bot with the token
-const bot = new Telegraf('7542765454:AAG4dTJYB7e5N73wCfjtAcwe4bCb6bWiHdM');
+// PostgreSQL Connection
+const pool = new Pool({
+  connectionString: 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3'
+});
 
-// State to manage ongoing conversations
-const userStates = {};
+const bot = new Telegraf(BOT_TOKEN);
 
-// Start command
+// Set up the webhook
+bot.telegram.setWebhook(`${WEBHOOK_URL}/bot${BOT_TOKEN}`);
+bot.webhookCallback(`/bot${BOT_TOKEN}`);
+
+// Command handlers
 bot.start((ctx) => {
-  ctx.reply('Welcome! What would you like to do?', {
+  ctx.reply('Welcome! Please choose an option:', {
     reply_markup: {
-      inline_keyboard: [
-        [{ text: 'Create Account', callback_data: 'create_account' }],
-        [{ text: 'Login', callback_data: 'login' }],
+      keyboard: [
+        [{ text: 'Create account' }],
+        [{ text: 'Login' }]
       ],
-    },
+      resize_keyboard: true
+    }
   });
 });
 
-// Create Account Action
-bot.action('create_account', (ctx) => {
-  const chatId = ctx.chat.id;
-  userStates[chatId] = { step: 'username' };
-  ctx.reply('Choose a username:');
+// Handle button clicks
+bot.hears('Create account', async (ctx) => {
+  await ctx.reply('Choose a username:');
+  ctx.session.stage = 'create';
 });
 
-// Handle user input for account creation
+bot.hears('Login', async (ctx) => {
+  await ctx.reply('Enter your username:');
+  ctx.session.stage = 'login';
+});
+
+// Handle username input
 bot.on('text', async (ctx) => {
-  const chatId = ctx.chat.id;
-  const state = userStates[chatId];
-
-  if (!state) return; // Ignore messages if no ongoing conversation
-
-  try {
-    if (state.step === 'username') {
-      const username = ctx.message.text;
-      const user = await User.findOne({ where: { username } });
-
-      if (user) {
-        ctx.reply('Username taken. Please choose another username.');
-      } else {
-        state.step = 'password';
-        state.username = username; // Save username for later use
-        ctx.reply('Username available. Please choose a password:');
-      }
-    } else if (state.step === 'password') {
-      const password = ctx.message.text;
-      const username = state.username;
-
-      await User.create({ username, password }); // balance is automatically set to 0
-      ctx.reply('Account created successfully!');
-      delete userStates[chatId]; // Clear state after account creation
+  const username = ctx.message.text;
+  
+  if (ctx.session.stage === 'create') {
+    // Check if username exists
+    const { rows } = await pool.query('SELECT username FROM users WHERE username = $1', [username]);
+    
+    if (rows.length > 0) {
+      await ctx.reply('Username taken. Choose another username:');
+    } else {
+      ctx.session.username = username;
+      await ctx.reply('Choose a password:');
+      ctx.session.stage = 'password';
     }
-  } catch (error) {
-    console.error('Error handling text input:', error);
-    ctx.reply('An error occurred. Please try again.');
+  } else if (ctx.session.stage === 'password') {
+    const password = username; // Store the password
+    await pool.query('INSERT INTO users (username, password, balance) VALUES ($1, $2, $3)', [ctx.session.username, password, 0]);
+    await ctx.reply('Account created successfully!');
+    delete ctx.session.stage;
+    delete ctx.session.username;
+  } else if (ctx.session.stage === 'login') {
+    // Check username and password
+    const { rows } = await pool.query('SELECT password FROM users WHERE username = $1', [username]);
+    
+    if (rows.length === 0) {
+      await ctx.reply('Username or password incorrect. Try again.');
+      ctx.session.stage = 'login';
+    } else {
+      await ctx.reply('Enter your password:');
+      ctx.session.username = username;
+      ctx.session.stage = 'password_check';
+    }
+  } else if (ctx.session.stage === 'password_check') {
+    const { rows } = await pool.query('SELECT password FROM users WHERE username = $1', [ctx.session.username]);
+    
+    if (rows.length > 0 && rows[0].password === username) {
+      await ctx.reply('Login successful!');
+      delete ctx.session.stage;
+      delete ctx.session.username;
+    } else {
+      await ctx.reply('Username or password incorrect. Try again.');
+      delete ctx.session.stage;
+      delete ctx.session.username;
+    }
   }
 });
 
-// Login Action
-bot.action('login', (ctx) => {
-  const chatId = ctx.chat.id;
-  userStates[chatId] = { step: 'login_username' };
-  ctx.reply('Enter your username:');
-});
-
-// Handle user input for login
-bot.on('text', async (ctx) => {
-  const chatId = ctx.chat.id;
-  const state = userStates[chatId];
-
-  if (!state) return; // Ignore messages if no ongoing conversation
-
-  try {
-    if (state.step === 'login_username') {
-      const username = ctx.message.text;
-      const user = await User.findOne({ where: { username } });
-
-      if (!user) {
-        ctx.reply('Username does not exist. Please try again.');
-      } else {
-        state.step = 'login_password';
-        state.username = username; // Save username for password check
-        ctx.reply('Enter your password:');
-      }
-    } else if (state.step === 'login_password') {
-      const password = ctx.message.text;
-      const username = state.username;
-
-      const user = await User.findOne({ where: { username, password } });
-
-      if (user) {
-        ctx.reply('Login successful!');
-      } else {
-        ctx.reply('Username or password not correct. Please try again.');
-      }
-      delete userStates[chatId]; // Clear state after login attempt
-    }
-  } catch (error) {
-    console.error('Error handling text input during login:', error);
-    ctx.reply('An error occurred. Please try again.');
-  }
-});
-
-// Set webhook
-app.post('/webhook', (req, res) => {
-  bot.handleUpdate(req.body);
-  res.sendStatus(200);
-});
-
-app.listen(3000, () => {
-  console.log('Server is running on port 3000');
-});
-
-// Set the webhook URL
-bot.telegram.setWebhook('https://tradebot-5390.onrender.com/webhook');
+bot.launch();
