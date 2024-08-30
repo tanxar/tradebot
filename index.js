@@ -1,6 +1,8 @@
 import { Telegraf } from 'telegraf';
-import { Pool } from 'pg';
 import fetch from 'node-fetch';
+import pg from 'pg'; // Default import for CommonJS
+
+const { Pool } = pg; // Destructure Pool from the imported pg module
 
 // Telegram Bot Token
 const BOT_TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
