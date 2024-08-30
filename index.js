@@ -1,6 +1,6 @@
-const { Telegraf } = require('telegraf');
-const { Pool } = require('pg');
-const fetch = require('node-fetch');
+import { Telegraf } from 'telegraf';
+import { Pool } from 'pg';
+import fetch from 'node-fetch';
 
 // Telegram Bot Token
 const BOT_TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
@@ -44,11 +44,11 @@ bot.hears('Login', async (ctx) => {
 // Handle username input
 bot.on('text', async (ctx) => {
   const username = ctx.message.text;
-  
+
   if (ctx.session.stage === 'create') {
     // Check if username exists
     const { rows } = await pool.query('SELECT username FROM users WHERE username = $1', [username]);
-    
+
     if (rows.length > 0) {
       await ctx.reply('Username taken. Choose another username:');
     } else {
@@ -65,7 +65,7 @@ bot.on('text', async (ctx) => {
   } else if (ctx.session.stage === 'login') {
     // Check username and password
     const { rows } = await pool.query('SELECT password FROM users WHERE username = $1', [username]);
-    
+
     if (rows.length === 0) {
       await ctx.reply('Username or password incorrect. Try again.');
       ctx.session.stage = 'login';
@@ -76,7 +76,7 @@ bot.on('text', async (ctx) => {
     }
   } else if (ctx.session.stage === 'password_check') {
     const { rows } = await pool.query('SELECT password FROM users WHERE username = $1', [ctx.session.username]);
-    
+
     if (rows.length > 0 && rows[0].password === username) {
       await ctx.reply('Login successful!');
       delete ctx.session.stage;
