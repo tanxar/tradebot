@@ -19,7 +19,7 @@ await dbClient.connect();
 app.use(bot.webhookCallback('/webhook'));
 
 // Set up the webhook route
-bot.telegram.setWebhook('https://pythontestbot-f4g1.onrender.com/webhook');
+bot.telegram.setWebhook('https://dedouleveitipota.onrender.com/webhook');
 
 // Initialize session management
 bot.use((ctx, next) => {
