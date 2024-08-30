@@ -65,4 +65,4 @@ def set_webhook():
         return "Webhook setup failed", 400
 
 if __name__ == "__main__":
-    app.run(port=5000)
+    app.run(port=10000)
