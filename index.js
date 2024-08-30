@@ -1,6 +1,10 @@
+import express from 'express';
 import { Telegraf } from 'telegraf';
-import pkg from 'pg'; // Default import
-const { Client } = pkg; // Destructure Client from the default import
+import pkg from 'pg';
+const { Client } = pkg;
+
+// Initialize the Express app
+const app = express();
 
 // Initialize the Telegram bot with your bot token
 const bot = new Telegraf('7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE');
@@ -9,7 +13,13 @@ const bot = new Telegraf('7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE');
 const dbClient = new Client({
     connectionString: 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3'
 });
-await dbClient.connect(); // Make sure this is inside an async function
+await dbClient.connect();
+
+// Add Express middleware for Telegraf
+app.use(bot.webhookCallback('/webhook'));
+
+// Set up the webhook route
+bot.telegram.setWebhook('https://pythontestbot-f4g1.onrender.com/webhook');
 
 // Initialize session management
 bot.use((ctx, next) => {
@@ -80,20 +90,8 @@ bot.on('text', async (ctx) => {
     }
 });
 
-// Set up webhook
-const setWebhook = async () => {
-    try {
-        await bot.telegram.setWebhook('https://pythontestbot-f4g1.onrender.com/webhook');
-        console.log('Webhook set up successfully.');
-    } catch (error) {
-        console.error('Error setting up webhook:', error);
-    }
-};
-
-await setWebhook(); // Make sure this is inside an async function
-
-// Handle webhook requests
-bot.webhookCallback('/webhook');
-
-// Start bot
-bot.launch();
+// Start the server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
