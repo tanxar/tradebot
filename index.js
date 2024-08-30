@@ -1,6 +1,6 @@
 import { Telegraf } from 'telegraf';
 import fetch from 'node-fetch';
-import pg from 'pg'; // Default import for CommonJS
+import pg from 'pg'; // Default import for CommonJS module
 
 const { Pool } = pg; // Destructure Pool from the imported pg module
 
