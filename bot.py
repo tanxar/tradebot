@@ -1,65 +1,68 @@
-import telebot
-import psycopg2
 from flask import Flask, request
+import psycopg2
+from telegram import Bot, Update
+from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters
+import logging
 
-# Telegram bot token
-API_TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE'
-bot = telebot.TeleBot(API_TOKEN)
-
-# Database connection URL
-DB_URL = "postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3"
-
-# Flask app
+# Initialize Flask app
 app = Flask(__name__)
 
-# Initialize the bot's webhook
-@app.route('/' + API_TOKEN, methods=['POST'])
+# Telegram Bot Token
+TELEGRAM_BOT_TOKEN = "7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE"
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
+# PostgreSQL connection setup
+DATABASE_URL = "postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3"
+conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+
+# Configure logging
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+
+# Command handler for '/start'
+def start(update, context):
+    update.message.reply_text("Welcome! Please use /register <username> <password> to register.")
+
+# Message handler for registration
+def register(update, context):
+    if len(context.args) == 2:
+        username = context.args[0]
+        password = context.args[1]
+        
+        # Insert into PostgreSQL
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO Users (username, password) VALUES (%s, %s)", (username, password))
+            conn.commit()
+
+        update.message.reply_text(f"User {username} registered successfully!")
+    else:
+        update.message.reply_text("Usage: /register <username> <password>")
+
+# Function to process incoming Telegram updates
+def handle_update(update_json):
+    update = Update.de_json(update_json, bot)
+    dispatcher.process_update(update)
+
+# Initialize dispatcher
+dispatcher = Dispatcher(bot, None, workers=0)
+dispatcher.add_handler(CommandHandler("start", start))
+dispatcher.add_handler(CommandHandler("register", register))
+
+# Flask route to handle webhooks
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
-    return "!", 200
-
-# Welcome message
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message, "Welcome! Please send your username and password in the format: /auth username password")
-
-# Handler to save username and password
-@bot.message_handler(commands=['auth'])
-def handle_auth(message):
-    try:
-        # Split the message to extract username and password
-        command, username, password = message.text.split()
-
-        # Insert into the database
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
-
-        # Ensure the Users table exists
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS Users (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(255) NOT NULL,
-                password VARCHAR(255) NOT NULL
-            )
-        """)
-        conn.commit()
-
-        # Insert the new user
-        cur.execute("INSERT INTO Users (username, password) VALUES (%s, %s)", (username, password))
-        conn.commit()
-
-        cur.close()
-        conn.close()
-
-        bot.reply_to(message, "User saved successfully!")
-
-    except Exception as e:
-        bot.reply_to(message, f"Failed to save user: {str(e)}")
+    update_json = request.get_json(force=True)
+    handle_update(update_json)
+    return "OK", 200
 
 # Set webhook
-bot.remove_webhook()
-bot.set_webhook(url="https://ftheiromai.onrender.com/" + API_TOKEN)
+@app.route("/set_webhook", methods=["GET", "POST"])
+def set_webhook():
+    webhook_url = f"https://ftheiromai.onrender.com/webhook"
+    s = bot.set_webhook(webhook_url)
+    if s:
+        return "Webhook setup successful", 200
+    else:
+        return "Webhook setup failed", 400
 
-# Start Flask app
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8443)
+    app.run(port=5000)
