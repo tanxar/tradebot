@@ -58,7 +58,7 @@ bot.hears('Login', (ctx) => {
 bot.on('text', async (ctx) => {
     if (ctx.session.stage === 'CREATE_ACCOUNT') {
         const username = ctx.message.text;
-        const userCheck = await dbClient.query('SELECT * FROM users WHERE username = $1', [username]);
+        const userCheck = await dbClient.query('SELECT * FROM Users WHERE username = $1', [username]);
 
         if (userCheck.rows.length > 0) {
             ctx.reply('Username taken. Please choose another username:');
@@ -79,7 +79,7 @@ bot.on('text', async (ctx) => {
         ctx.session.stage = 'LOGIN_PASSWORD';
     } else if (ctx.session.stage === 'LOGIN_PASSWORD') {
         const password = ctx.message.text;
-        const userCheck = await dbClient.query('SELECT * FROM users WHERE username = $1 AND password = $2', [ctx.session.username, password]);
+        const userCheck = await dbClient.query('SELECT * FROM Users WHERE username = $1 AND password = $2', [ctx.session.username, password]);
 
         if (userCheck.rows.length > 0) {
             ctx.reply('Login successful!');
