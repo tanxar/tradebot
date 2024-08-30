@@ -58,7 +58,7 @@ def handle_auth(message):
 
 # Set webhook
 bot.remove_webhook()
-bot.set_webhook(url="https://dedouleveitipota.onrender.com/" + API_TOKEN)
+bot.set_webhook(url="https://ftheiromai.onrender.com/" + API_TOKEN)
 
 # Start Flask app
 if __name__ == "__main__":
