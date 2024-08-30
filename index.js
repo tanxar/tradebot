@@ -1,6 +1,6 @@
-const { Telegraf } = require('telegraf');
-const { Client } = require('pg');
-const fetch = require('node-fetch');
+import { Telegraf } from 'telegraf';
+import { Client } from 'pg';
+// import fetch from 'node-fetch'; // No longer needed with dynamic import
 
 // Initialize the Telegram bot
 const bot = new Telegraf('7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE');
@@ -9,7 +9,15 @@ const bot = new Telegraf('7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE');
 const dbClient = new Client({
     connectionString: 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3'
 });
-dbClient.connect();
+await dbClient.connect();
+
+// Initialize session management
+bot.use((ctx, next) => {
+    if (!ctx.session) {
+        ctx.session = {};
+    }
+    return next();
+});
 
 // Start command handler
 bot.start((ctx) => {
@@ -82,7 +90,7 @@ const setWebhook = async () => {
     }
 };
 
-setWebhook();
+await setWebhook();
 
 // Handle webhook requests
 bot.webhookCallback('/webhook');
