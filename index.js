@@ -29,6 +29,7 @@ bot.start((ctx) => {
     ctx.session.stage = 'ASK_USERNAME';
 });
 
+// Handle text input for username and password
 bot.on('text', async (ctx) => {
     try {
         if (ctx.session.stage === 'ASK_USERNAME') {
@@ -37,7 +38,7 @@ bot.on('text', async (ctx) => {
             ctx.session.stage = 'ASK_PASSWORD';
         } else if (ctx.session.stage === 'ASK_PASSWORD') {
             const password = ctx.message.text;
-            await dbClient.query('INSERT INTO "Users" (username, password) VALUES ($1, $2)', [ctx.session.username, password]);
+            await dbClient.query('INSERT INTO Users (username, password) VALUES ($1, $2)', [ctx.session.username, password]);
             ctx.reply('Account created successfully!');
             ctx.session.stage = null;
         }
@@ -46,6 +47,10 @@ bot.on('text', async (ctx) => {
         ctx.reply('An error occurred. Please try again.');
     }
 });
+
+// Set up the webhook route
+bot.telegram.setWebhook('https://dedouleveitipota.onrender.com/webhook');
+app.use(bot.webhookCallback('/webhook'));
 
 // Start the server
 const PORT = process.env.PORT || 3000;
