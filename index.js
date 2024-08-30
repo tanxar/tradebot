@@ -1,5 +1,5 @@
 import express from 'express';
-import { Telegraf } from 'telegraf';
+import { Telegraf, session } from 'telegraf';
 import pkg from 'pg';
 const { Client } = pkg;
 
@@ -8,6 +8,9 @@ const app = express();
 
 // Initialize the Telegram bot with your bot token
 const bot = new Telegraf('7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE');
+
+// Add session middleware
+bot.use(session());
 
 // PostgreSQL connection setup
 const dbClient = new Client({
