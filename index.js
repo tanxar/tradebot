@@ -94,16 +94,7 @@ bot.on('text', async (ctx) => {
   }
 });
 
-// Start the bot
+// Launch the bot
 bot.launch()
   .then(() => console.log('Bot is running...'))
   .catch(err => console.error('Failed to start bot:', err));
-
-// This section is for environments where a port is required
-const PORT = process.env.PORT || 3000;
-if (process.env.PORT) {
-  // This is required only if you need to bind to a port for some reason
-  bot.server.listen(PORT, () => {
-    console.log(`Server is listening on port ${PORT}`);
-  });
-}
