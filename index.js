@@ -21,15 +21,18 @@ app.use(bot.webhookCallback('/webhook'));
 // Set up the webhook route
 bot.telegram.setWebhook('https://dedouleveitipota.onrender.com/webhook');
 
-// Initialize session management
-bot.use((ctx, next) => {
-    if (!ctx.session) {
-        ctx.session = {};
-    }
-    return next();
+// Route to display "Hello World"
+app.get('/', (req, res) => {
+    res.send('Hello World');
 });
 
-// Start command handler
+// Start the server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
+
+// Telegram Bot logic
 bot.start((ctx) => {
     ctx.reply('Welcome! Choose an option:', {
         reply_markup: {
@@ -42,19 +45,16 @@ bot.start((ctx) => {
     });
 });
 
-// Handler for Create account button
 bot.hears('Create account', (ctx) => {
     ctx.reply('Please choose a username:');
     ctx.session.stage = 'CREATE_ACCOUNT';
 });
 
-// Handler for Login button
 bot.hears('Login', (ctx) => {
     ctx.reply('Please enter your username:');
     ctx.session.stage = 'LOGIN';
 });
 
-// Username input handler for account creation
 bot.on('text', async (ctx) => {
     if (ctx.session.stage === 'CREATE_ACCOUNT') {
         const username = ctx.message.text;
@@ -88,10 +88,4 @@ bot.on('text', async (ctx) => {
             ctx.session.stage = 'LOGIN';
         }
     }
-});
-
-// Start the server
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
 });
