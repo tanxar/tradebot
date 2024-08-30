@@ -1,4 +1,4 @@
-import { Telegraf } from 'telegraf';
+import { Telegraf, session } from 'telegraf';
 import fetch from 'node-fetch';
 import pg from 'pg'; // Default import for CommonJS module
 
@@ -14,6 +14,9 @@ const pool = new Pool({
 });
 
 const bot = new Telegraf(BOT_TOKEN);
+
+// Initialize session middleware
+bot.use(session());
 
 // Set up the webhook
 bot.telegram.setWebhook(`${WEBHOOK_URL}/bot${BOT_TOKEN}`);
@@ -34,13 +37,13 @@ bot.start((ctx) => {
 
 // Handle button clicks
 bot.hears('Create account', async (ctx) => {
-  await ctx.reply('Choose a username:');
   ctx.session.stage = 'create';
+  await ctx.reply('Choose a username:');
 });
 
 bot.hears('Login', async (ctx) => {
-  await ctx.reply('Enter your username:');
   ctx.session.stage = 'login';
+  await ctx.reply('Enter your username:');
 });
 
 // Handle username input
