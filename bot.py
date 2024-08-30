@@ -1,58 +1,90 @@
-from flask import Flask, request
+import os
 import psycopg2
-from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackContext
+from flask import Flask, request
+from telegram import Update, Bot
+from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters, CallbackContext
+
+# Configuration
+TELEGRAM_TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE'
+DATABASE_URL = 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3'
+WEBHOOK_URL = 'https://ftheiromai.onrender.com/webhook'
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# Telegram Bot Token
-TELEGRAM_BOT_TOKEN = "7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE"
+# Initialize the bot
+bot = Bot(token=TELEGRAM_TOKEN)
 
-# PostgreSQL connection setup
-DATABASE_URL = "postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3"
-conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+# Set up the database connection
+conn = psycopg2.connect(DATABASE_URL)
+cursor = conn.cursor()
 
-# Initialize application
-application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+# Set up the dispatcher
+dispatcher = Dispatcher(bot, None, workers=0)
 
-# Command handler for '/start'
-async def start(update: Update, context: CallbackContext.DEFAULT_TYPE):
-    await update.message.reply_text("Welcome! Please use /register <username> <password> to register.")
+# Root route to display "Hello World"
+@app.route('/')
+def hello_world():
+    return "Hello World"
 
-# Command handler for '/register'
-async def register(update: Update, context: CallbackContext.DEFAULT_TYPE):
-    if len(context.args) == 2:
-        username = context.args[0]
-        password = context.args[1]
+# Command handler to start the bot
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text('Welcome to the bot! Use /register to sign up.')
 
-        # Insert into PostgreSQL
-        with conn.cursor() as cur:
-            cur.execute("INSERT INTO Users (username, password) VALUES (%s, %s)", (username, password))
-            conn.commit()
+# Command handler to register a new user
+def register(update: Update, context: CallbackContext):
+    chat_id = update.message.chat_id
+    username = update.message.from_user.username
+    password = "default_password"  # This should be replaced with a real password handling mechanism
 
-        await update.message.reply_text(f"User {username} registered successfully!")
+    try:
+        # Insert user into the database
+        cursor.execute("""
+            INSERT INTO "Users" (username, password, createdAt, updatedAt, balance)
+            VALUES (%s, %s, NOW(), NOW(), 0.0) RETURNING id;
+        """, (username, password))
+        conn.commit()
+
+        user_id = cursor.fetchone()[0]
+        update.message.reply_text(f'User registered with ID: {user_id}')
+
+    except Exception as e:
+        conn.rollback()
+        update.message.reply_text(f'Error registering user: {e}')
+
+# Handle incoming text messages
+def handle_message(update: Update, context: CallbackContext):
+    update.message.reply_text("I don't understand that command. Use /register to sign up.")
+
+# Add handlers to the dispatcher
+dispatcher.add_handler(CommandHandler('start', start))
+dispatcher.add_handler(CommandHandler('register', register))
+dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+
+# Webhook route
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    update = Update.de_json(request.get_json(), bot)
+    dispatcher.process_update(update)
+    return 'ok'
+
+# Set the webhook
+@app.route('/set_webhook', methods=['GET', 'POST'])
+def set_webhook():
+    s = bot.set_webhook(WEBHOOK_URL)
+    if s:
+        return "Webhook setup successful"
     else:
-        await update.message.reply_text("Usage: /register <username> <password>")
+        return "Webhook setup failed"
 
-# Add handlers to the application
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("register", register))
+# Remove the webhook
+@app.route('/remove_webhook', methods=['GET', 'POST'])
+def remove_webhook():
+    s = bot.delete_webhook()
+    if s:
+        return "Webhook removed"
+    else:
+        return "Failed to remove webhook"
 
-# Flask route to handle webhooks
-@app.route("/webhook", methods=["POST"])
-async def webhook():
-    update_json = request.get_json(force=True)
-    update = Update.de_json(update_json, application.bot)
-    await application.process_update(update)
-    return "OK", 200
-
-# Set webhook
-@app.route("/set_webhook", methods=["GET", "POST"])
-async def set_webhook():
-    webhook_url = f"https://ftheiromai.onrender.com/webhook"
-    await application.bot.set_webhook(webhook_url)
-    return "Webhook setup successful", 200
-
-if __name__ == "__main__":
-    app.run(port=10000, debug=True, use_reloader=False)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
