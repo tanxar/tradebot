@@ -27,8 +27,7 @@ fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
 
 let userSessions = {};
 
-async function showInitialOptions(chatId, messageId) {
-    await deleteMessage(chatId, messageId);
+async function showInitialOptions(chatId) {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
     const options = {
         chat_id: chatId,
@@ -48,7 +47,7 @@ async function showInitialOptions(chatId, messageId) {
 }
 
 async function askForUsername(chatId, messageId, action) {
-    await deleteMessage(chatId, messageId);
+    if (messageId) await deleteMessage(chatId, messageId);
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
     const text = action === 'create_account' ? "Please choose a username:" : "Please enter your username:";
 
@@ -62,7 +61,7 @@ async function askForUsername(chatId, messageId, action) {
 }
 
 async function askForPassword(chatId, messageId) {
-    await deleteMessage(chatId, messageId);
+    if (messageId) await deleteMessage(chatId, messageId);
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
     const text = "Please enter your password:";
 
@@ -74,7 +73,7 @@ async function askForPassword(chatId, messageId) {
 }
 
 async function handleUsernameResponse(chatId, messageId, text) {
-    await deleteMessage(chatId, messageId);
+    if (messageId) await deleteMessage(chatId, messageId);
     const session = userSessions[chatId];
 
     if (session.action === 'create_account') {
@@ -83,13 +82,13 @@ async function handleUsernameResponse(chatId, messageId, text) {
             await sendMessage(chatId, "Username taken, please choose another:");
         } else {
             userSessions[chatId].username = text;
-            await askForPassword(chatId, messageId);
+            await askForPassword(chatId);
         }
     } else if (session.action === 'login') {
         const user = await getUserByUsername(text);
         if (user) {
             userSessions[chatId].username = text;
-            await askForPassword(chatId, messageId);
+            await askForPassword(chatId);
         } else {
             await sendMessage(chatId, "Username not found. Please enter a valid username:");
         }
@@ -97,7 +96,7 @@ async function handleUsernameResponse(chatId, messageId, text) {
 }
 
 async function handlePasswordResponse(chatId, messageId, text) {
-    await deleteMessage(chatId, messageId);
+    if (messageId) await deleteMessage(chatId, messageId);
     const session = userSessions[chatId];
 
     if (session.action === 'create_account') {
@@ -140,7 +139,7 @@ async function showWelcomeMessage(chatId, username, balance) {
 }
 
 async function handleAddFunds(chatId, messageId) {
-    await deleteMessage(chatId, messageId);
+    if (messageId) await deleteMessage(chatId, messageId);
     await sendMessage(chatId, "Please enter the amount you would like to add:");
     userSessions[chatId] = { action: 'add_funds' };
 }
@@ -164,7 +163,7 @@ app.post('/webhook', async (req, res) => {
         if (data === 'create_account' || data === 'login') {
             await askForUsername(chatId, messageId, data);
         } else if (data === 'logout') {
-            await deleteMessage(chatId, messageId);
+            if (messageId) await deleteMessage(chatId, messageId);
             await sendMessage(chatId, "You have been logged out.");
         } else if (data === 'add_funds') {
             await handleAddFunds(chatId, messageId);
@@ -195,7 +194,7 @@ app.post('/webhook', async (req, res) => {
                 await handlePasswordResponse(chatId, messageId, text);
             }
         } else if (text === '/start') {
-            await showInitialOptions(chatId, messageId);
+            await showInitialOptions(chatId);
         }
     }
 
