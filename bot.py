@@ -1,90 +1,63 @@
-import os
-import psycopg2
 from flask import Flask, request
-from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+import psycopg2
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Configuration
-TELEGRAM_TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE'
-DATABASE_URL = 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3'
-WEBHOOK_URL = 'https://ftheiromai.onrender.com/webhook'
-
-# Initialize Flask app
+# Flask app for webhook
 app = Flask(__name__)
 
-# Initialize the bot
-bot = Bot(token=TELEGRAM_TOKEN)
+# Database connection string
+DB_URL = "postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3"
 
-# Set up the database connection
-conn = psycopg2.connect(DATABASE_URL)
-cursor = conn.cursor()
+# Telegram bot token
+BOT_TOKEN = "7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE"
 
-# Set up the application
-application = Application.builder().token(TELEGRAM_TOKEN).build()
+# Webhook URL
+WEBHOOK_URL = "https://ftheiromai.onrender.com/telegram-webhook"
 
-# Root route to display "Hello World"
-@app.route('/')
-def hello_world():
-    return "Hello World"
+# Define the /start command
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text('Welcome! Please send your username and password in the format: username,password')
 
-# Command handler to start the bot
-async def start(update: Update, context):
-    await update.message.reply_text('Welcome to the bot! Use /register to sign up.')
-
-# Command handler to register a new user
-async def register(update: Update, context):
-    chat_id = update.message.chat_id
-    username = update.message.from_user.username
-    password = "default_password"  # This should be replaced with a real password handling mechanism
-
-    try:
-        # Insert user into the database
-        cursor.execute("""
-            INSERT INTO "Users" (username, password, createdAt, updatedAt, balance)
-            VALUES (%s, %s, NOW(), NOW(), 0.0) RETURNING id;
-        """, (username, password))
-        conn.commit()
-
-        user_id = cursor.fetchone()[0]
-        await update.message.reply_text(f'User registered with ID: {user_id}')
-
-    except Exception as e:
-        conn.rollback()
-        await update.message.reply_text(f'Error registering user: {e}')
-
-# Handle incoming text messages
-async def handle_message(update: Update, context):
-    await update.message.reply_text("I don't understand that command. Use /register to sign up.")
-
-# Add handlers to the application
-application.add_handler(CommandHandler('start', start))
-application.add_handler(CommandHandler('register', register))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-# Webhook route
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    update = Update.de_json(request.get_json(), bot)
-    application.update_queue.put_nowait(update)
-    return 'ok'
-
-# Set the webhook
-@app.route('/set_webhook', methods=['GET', 'POST'])
-def set_webhook():
-    s = bot.set_webhook(WEBHOOK_URL)
-    if s:
-        return "Webhook setup successful"
+# Define a message handler for user data
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = update.message.text
+    if ',' in text:
+        username, password = text.split(',', 1)
+        try:
+            conn = psycopg2.connect(DB_URL)
+            cur = conn.cursor()
+            cur.execute("INSERT INTO Users (username, password) VALUES (%s, %s)", (username.strip(), password.strip()))
+            conn.commit()
+            cur.close()
+            conn.close()
+            await update.message.reply_text('Username and password saved successfully!')
+        except Exception as e:
+            await update.message.reply_text(f'Failed to save data: {e}')
     else:
-        return "Webhook setup failed"
+        await update.message.reply_text('Please send your username and password in the correct format: username,password')
 
-# Remove the webhook
-@app.route('/remove_webhook', methods=['GET', 'POST'])
-def remove_webhook():
-    s = bot.delete_webhook()
-    if s:
-        return "Webhook removed"
-    else:
-        return "Failed to remove webhook"
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Command handler for /start
+    app.add_handler(CommandHandler("start", start))
+
+    # Message handler for capturing username and password
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # Set webhook
+    app.bot.set_webhook(WEBHOOK_URL)
+
+    # Flask route for webhook
+    @app.route('/telegram-webhook', methods=['POST'])
+    def webhook():
+        update = Update.de_json(request.get_json(), app.bot)
+        app.process_update(update)
+        return 'ok'
+
+    # Start the Flask app
+    app.run(host="0.0.0.0", port=5000)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    main()
