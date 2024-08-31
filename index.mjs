@@ -39,70 +39,60 @@ async function showInitialOptions(chatId) {
             ],
         },
     };
-    const response = await fetch(url, {
+    await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(options),
     });
-    const data = await response.json();
-    userSessions[chatId] = { lastBotMessageId: data.message_id };
 }
 
-async function askForUsername(chatId, messageId, action) {
-    await deleteMessages(chatId, messageId);
+async function askForUsername(chatId, action) {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
     const text = action === 'create_account' ? "Please choose a username:" : "Please enter your username:";
 
-    const response = await fetch(url, {
+    userSessions[chatId] = { action }; // Save the current action in the session
+
+    await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text }),
     });
-    const data = await response.json();
-    userSessions[chatId] = { action, lastBotMessageId: data.message_id };
 }
 
-async function askForPassword(chatId, messageId) {
-    await deleteMessages(chatId, messageId);
+async function askForPassword(chatId) {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
     const text = "Please enter your password:";
 
-    const response = await fetch(url, {
+    await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text }),
     });
-    const data = await response.json();
-    userSessions[chatId].lastBotMessageId = data.message_id;
 }
 
-async function handleUsernameResponse(chatId, messageId, text) {
-    await deleteMessages(chatId, messageId);
+async function handleUsernameResponse(chatId, text) {
     const session = userSessions[chatId];
 
     if (session.action === 'create_account') {
         const usernameExists = await checkUsernameExists(text);
         if (usernameExists) {
-            const botMessage = await sendMessage(chatId, "Username taken, please choose another:");
-            userSessions[chatId].lastBotMessageId = botMessage.message_id;
+            await sendMessage(chatId, "Username taken, please choose another:");
         } else {
             userSessions[chatId].username = text;
-            await askForPassword(chatId, null);
+            await askForPassword(chatId);
         }
     } else if (session.action === 'login') {
         const user = await getUserByUsername(text);
         if (user) {
             userSessions[chatId].username = text;
-            await askForPassword(chatId, null);
+            await askForPassword(chatId);
         } else {
-            const botMessage = await sendMessage(chatId, "Username not found. Please enter a valid username:");
-            userSessions[chatId].lastBotMessageId = botMessage.message_id;
+            await sendMessage(chatId, "Username not found. Please enter a valid username:");
         }
     }
 }
 
-async function handlePasswordResponse(chatId, messageId, text) {
-    await deleteMessages(chatId, messageId);
+async function handlePasswordResponse(chatId, text) {
     const session = userSessions[chatId];
 
     if (session.action === 'create_account') {
@@ -117,8 +107,7 @@ async function handlePasswordResponse(chatId, messageId, text) {
             await showWelcomeMessage(chatId, user.username, user.balance);
             delete userSessions[chatId];
         } else {
-            const botMessage = await sendMessage(chatId, "Incorrect password. Please try again:");
-            userSessions[chatId].lastBotMessageId = botMessage.message_id;
+            await sendMessage(chatId, "Incorrect password. Please try again:");
         }
     }
 }
@@ -138,27 +127,22 @@ async function showWelcomeMessage(chatId, username, balance) {
         },
     };
 
-    const response = await fetch(url, {
+    await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(options),
     });
-    const data = await response.json();
-    userSessions[chatId].lastBotMessageId = data.message_id;
 }
 
-async function handleAddFunds(chatId, messageId) {
-    await deleteMessages(chatId, messageId);
-    const botMessage = await sendMessage(chatId, "Please enter the amount you would like to add:");
-    userSessions[chatId].lastBotMessageId = botMessage.message_id;
-    userSessions[chatId].action = 'add_funds';
+async function handleAddFunds(chatId) {
+    await sendMessage(chatId, "Please enter the amount you would like to add:");
+    userSessions[chatId] = { action: 'add_funds' };
 }
 
-async function addFundsToUser(chatId, messageId, username, amount) {
+async function addFundsToUser(chatId, username, amount) {
     const query = 'UPDATE Users SET balance = balance + $1 WHERE username = $2';
     await client.query(query, [amount, username]);
-    const botMessage = await sendMessage(chatId, `Added ${amount} to your account.`);
-    userSessions[chatId].lastBotMessageId = botMessage.message_id;
+    await sendMessage(chatId, `Added ${amount} to your account.`);
 }
 
 // Handling incoming updates (messages and callbacks)
@@ -168,22 +152,19 @@ app.post('/webhook', async (req, res) => {
 
     if (callbackQuery) {
         const chatId = callbackQuery.message.chat.id;
-        const messageId = callbackQuery.message.message_id;
         const data = callbackQuery.data;
 
         if (data === 'create_account' || data === 'login') {
-            await askForUsername(chatId, messageId, data);
+            await askForUsername(chatId, data);
         } else if (data === 'logout') {
-            await deleteMessages(chatId, messageId);
             await sendMessage(chatId, "You have been logged out.");
         } else if (data === 'add_funds') {
-            await handleAddFunds(chatId, messageId);
+            await handleAddFunds(chatId);
         }
     }
 
     if (message) {
         const chatId = message.chat.id;
-        const messageId = message.message_id;
         const text = message.text;
 
         if (userSessions[chatId]) {
@@ -192,18 +173,17 @@ app.post('/webhook', async (req, res) => {
             if (session.action === 'add_funds') {
                 const amount = parseFloat(text);
                 if (isNaN(amount) || amount <= 0) {
-                    const botMessage = await sendMessage(chatId, "Please enter a valid amount.");
-                    userSessions[chatId].lastBotMessageId = botMessage.message_id;
+                    await sendMessage(chatId, "Please enter a valid amount.");
                 } else {
-                    await addFundsToUser(chatId, messageId, session.username, amount);
+                    await addFundsToUser(chatId, session.username, amount);
                     const user = await getUserByUsername(session.username);
                     await showWelcomeMessage(chatId, user.username, user.balance);
                     delete userSessions[chatId];
                 }
             } else if (!session.username) {
-                await handleUsernameResponse(chatId, messageId, text);
+                await handleUsernameResponse(chatId, text);
             } else {
-                await handlePasswordResponse(chatId, messageId, text);
+                await handlePasswordResponse(chatId, text);
             }
         } else if (text === '/start') {
             await showInitialOptions(chatId);
@@ -215,31 +195,11 @@ app.post('/webhook', async (req, res) => {
 
 async function sendMessage(chatId, text) {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    const response = await fetch(url, {
+    await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text }),
     });
-    return response.json(); // Return message details, including message_id
-}
-
-async function deleteMessages(chatId, messageId) {
-    if (messageId) {
-        const url = `https://api.telegram.org/bot${TOKEN}/deleteMessage`;
-        await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
-        });
-    }
-    const lastBotMessageId = userSessions[chatId]?.lastBotMessageId;
-    if (lastBotMessageId) {
-        await fetch(`https://api.telegram.org/bot${TOKEN}/deleteMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, message_id: lastBotMessageId }),
-        });
-    }
 }
 
 async function checkUsernameExists(username) {
