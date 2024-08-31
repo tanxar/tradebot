@@ -1,0 +1,15 @@
+{
+  "name": "telegram-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot to register users using webhook and PostgreSQL.",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "body-parser": "^1.19.0",
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.1",
+    "pg": "^8.11.0"
+  }
+}
