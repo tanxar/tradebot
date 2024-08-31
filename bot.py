@@ -1,10 +1,11 @@
 from flask import Flask, request
 import psycopg2
+import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 # Flask app for webhook
-app = Flask(__name__)
+flask_app = Flask(__name__)
 
 # Database connection string
 DB_URL = "postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3"
@@ -14,6 +15,9 @@ BOT_TOKEN = "7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE"
 
 # Webhook URL
 WEBHOOK_URL = "https://ftheiromai.onrender.com/telegram-webhook"
+
+# Create the Telegram bot application
+app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 # Define the /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -37,27 +41,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     else:
         await update.message.reply_text('Please send your username and password in the correct format: username,password')
 
-def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+# Register handlers
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Command handler for /start
-    app.add_handler(CommandHandler("start", start))
+# Flask route for webhook
+@flask_app.route('/telegram-webhook', methods=['POST'])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), app.bot)
+    asyncio.run(app.process_update(update))
+    return 'ok'
 
-    # Message handler for capturing username and password
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+async def set_webhook():
+    await app.bot.set_webhook(WEBHOOK_URL)
 
-    # Set webhook
-    app.bot.set_webhook(WEBHOOK_URL)
-
-    # Flask route for webhook
-    @app.route('/telegram-webhook', methods=['POST'])
-    def webhook():
-        update = Update.de_json(request.get_json(), app.bot)
-        app.process_update(update)
-        return 'ok'
-
-    # Start the Flask app
-    app.run(host="0.0.0.0", port=5000)
-
+# Main entry point
 if __name__ == '__main__':
-    main()
+    asyncio.run(set_webhook())  # Set the webhook asynchronously
+    flask_app.run(host="0.0.0.0", port=5000)  # Start Flask app to listen for webhooks
