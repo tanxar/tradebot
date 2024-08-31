@@ -98,7 +98,8 @@ async function handlePasswordResponse(chatId, text) {
     if (session.action === 'create_account') {
         const username = session.username;
         await createUser(username, text);
-        await sendMessage(chatId, `Account created successfully! Welcome, ${username}.`);
+        const user = await getUserByUsername(username);
+        await showWelcomeMessage(chatId, user.username, user.balance);
         delete userSessions[chatId];
     } else if (session.action === 'login') {
         const user = await getUserByUsername(session.username);
