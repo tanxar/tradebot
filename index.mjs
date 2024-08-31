@@ -103,12 +103,33 @@ async function handlePasswordResponse(chatId, text) {
     } else if (session.action === 'login') {
         const user = await getUserByUsername(session.username);
         if (user && user.password === text) {
-            await sendMessage(chatId, `Login successful! Welcome back, ${user.username}.`);
+            await showWelcomeMessage(chatId, user.username, user.balance);
             delete userSessions[chatId];
         } else {
             await sendMessage(chatId, "Incorrect password. Please try again:");
         }
     }
+}
+
+async function showWelcomeMessage(chatId, username, balance) {
+    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    const message = `Welcome back, ${username}!\n\nYour balance: ${balance}`;
+
+    const options = {
+        chat_id: chatId,
+        text: message,
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "Logout", callback_data: "logout" }],
+            ],
+        },
+    };
+
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+    });
 }
 
 // Handling incoming updates (messages and callbacks)
@@ -122,6 +143,8 @@ app.post('/webhook', async (req, res) => {
 
         if (data === 'create_account' || data === 'login') {
             await askForUsername(chatId, data);
+        } else if (data === 'logout') {
+            await sendMessage(chatId, "You have been logged out.");
         }
     }
 
