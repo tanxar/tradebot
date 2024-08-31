@@ -39,14 +39,17 @@ async function showInitialOptions(chatId) {
             ],
         },
     };
-    await fetch(url, {
+    const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(options),
     });
+    const data = await response.json();
+    return data.message_id;
 }
 
-async function askForUsername(chatId, action) {
+async function askForUsername(chatId, action, messageId) {
+    await deleteMessage(chatId, messageId);
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
     const text = action === 'create_account' ? "Please choose a username:" : "Please enter your username:";
 
@@ -139,6 +142,12 @@ async function handleAddFunds(chatId) {
     userSessions[chatId] = { action: 'add_funds' };
 }
 
+async function handleLogout(chatId, messageId) {
+    await deleteMessage(chatId, messageId);
+    await sendMessage(chatId, "You have been logged out.");
+    await showInitialOptions(chatId); // Restart the bot by showing the initial options again
+}
+
 async function addFundsToUser(chatId, username, amount) {
     const query = 'UPDATE Users SET balance = balance + $1 WHERE username = $2';
     await client.query(query, [amount, username]);
@@ -152,12 +161,13 @@ app.post('/webhook', async (req, res) => {
 
     if (callbackQuery) {
         const chatId = callbackQuery.message.chat.id;
+        const messageId = callbackQuery.message.message_id;
         const data = callbackQuery.data;
 
         if (data === 'create_account' || data === 'login') {
-            await askForUsername(chatId, data);
+            await askForUsername(chatId, data, messageId);
         } else if (data === 'logout') {
-            await sendMessage(chatId, "You have been logged out.");
+            await handleLogout(chatId, messageId);
         } else if (data === 'add_funds') {
             await handleAddFunds(chatId);
         }
@@ -186,7 +196,8 @@ app.post('/webhook', async (req, res) => {
                 await handlePasswordResponse(chatId, text);
             }
         } else if (text === '/start') {
-            await showInitialOptions(chatId);
+            const initialMessageId = await showInitialOptions(chatId);
+            userSessions[chatId] = { initialMessageId };
         }
     }
 
@@ -199,6 +210,15 @@ async function sendMessage(chatId, text) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text }),
+    });
+}
+
+async function deleteMessage(chatId, messageId) {
+    const url = `https://api.telegram.org/bot${TOKEN}/deleteMessage`;
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
     });
 }
 
