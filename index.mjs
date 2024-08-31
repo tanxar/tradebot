@@ -48,7 +48,7 @@ async function showInitialOptions(chatId) {
 
 async function askForUsername(chatId, action) {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    const text = action === 'create' ? "Please choose a username:" : "Please enter your username:";
+    const text = action === 'create_account' ? "Please choose a username:" : "Please enter your username:";
 
     userSessions[chatId] = { action }; // Save the current action in the session
 
@@ -73,7 +73,7 @@ async function askForPassword(chatId) {
 async function handleUsernameResponse(chatId, text) {
     const session = userSessions[chatId];
 
-    if (session.action === 'create') {
+    if (session.action === 'create_account') {
         const usernameExists = await checkUsernameExists(text);
         if (usernameExists) {
             await sendMessage(chatId, "Username taken, please choose another:");
@@ -95,7 +95,7 @@ async function handleUsernameResponse(chatId, text) {
 async function handlePasswordResponse(chatId, text) {
     const session = userSessions[chatId];
 
-    if (session.action === 'create') {
+    if (session.action === 'create_account') {
         const username = session.username;
         await createUser(username, text);
         await sendMessage(chatId, `Account created successfully! Welcome, ${username}.`);
