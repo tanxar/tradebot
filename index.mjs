@@ -25,32 +25,6 @@ fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
     .then(json => console.log(json))
     .catch(err => console.error('Error setting webhook:', err));
 
-// Handle incoming messages
-app.post('/webhook', async (req, res) => {
-    const message = req.body.message;
-    const callbackQuery = req.body.callback_query;
-
-    if (message) {
-        const chatId = message.chat.id;
-        if (message.text === '/start') {
-            await showInitialOptions(chatId);
-        }
-    }
-
-    if (callbackQuery) {
-        const chatId = callbackQuery.message.chat.id;
-        const data = callbackQuery.data;
-
-        if (data === 'create_account') {
-            await askForUsername(chatId, 'create');
-        } else if (data === 'login') {
-            await askForUsername(chatId, 'login');
-        }
-    }
-
-    res.sendStatus(200);
-});
-
 let userSessions = {};
 
 async function showInitialOptions(chatId) {
@@ -137,8 +111,19 @@ async function handlePasswordResponse(chatId, text) {
     }
 }
 
+// Handling incoming updates (messages and callbacks)
 app.post('/webhook', async (req, res) => {
     const message = req.body.message;
+    const callbackQuery = req.body.callback_query;
+
+    if (callbackQuery) {
+        const chatId = callbackQuery.message.chat.id;
+        const data = callbackQuery.data;
+
+        if (data === 'create_account' || data === 'login') {
+            await askForUsername(chatId, data);
+        }
+    }
 
     if (message) {
         const chatId = message.chat.id;
