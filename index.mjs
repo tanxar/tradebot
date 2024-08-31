@@ -100,14 +100,15 @@ async function handlePasswordResponse(chatId, text) {
 
     if (session.action === 'create_account') {
         const username = session.username;
-        await createUser(username, text);
+        const referralCode = await generateUniqueReferralCode();
+        await createUser(username, text, referralCode);
         const user = await getUserByUsername(username);
-        await showWelcomeMessage(chatId, user.username, user.balance);
+        await showWelcomeMessage(chatId, user.username, user.balance, user.referral_code);
         delete userSessions[chatId];
     } else if (session.action === 'login') {
         const user = await getUserByUsername(session.username);
         if (user && user.password === text) {
-            await showWelcomeMessage(chatId, user.username, user.balance);
+            await showWelcomeMessage(chatId, user.username, user.balance, user.referral_code);
             delete userSessions[chatId];
         } else {
             await sendMessage(chatId, "Incorrect password. Please try again:");
@@ -115,13 +116,14 @@ async function handlePasswordResponse(chatId, text) {
     }
 }
 
-async function showWelcomeMessage(chatId, username, balance) {
+async function showWelcomeMessage(chatId, username, balance, referralCode) {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    const message = `Welcome back, ${username}!\n\nYour balance: ${balance}`;
+    const message = `Welcome back, ${username}!\n\nYour balance: ${balance}\n\nReferral code: <code>${referralCode}</code>\n\nClick and hold on the code to copy.`;
 
     const options = {
         chat_id: chatId,
         text: message,
+        parse_mode: 'HTML', // Enable HTML mode to format the referral code
         reply_markup: {
             inline_keyboard: [
                 [{ text: "Add Funds", callback_data: "add_funds" }],
@@ -152,6 +154,38 @@ async function addFundsToUser(chatId, username, amount) {
     const query = 'UPDATE Users SET balance = balance + $1 WHERE username = $2';
     await client.query(query, [amount, username]);
     await sendMessage(chatId, `Added ${amount} to your account.`);
+}
+
+// Function to generate a unique 6-digit referral code
+async function generateUniqueReferralCode() {
+    let isUnique = false;
+    let referralCode;
+    while (!isUnique) {
+        referralCode = Math.floor(100000 + Math.random() * 900000).toString(); // Generate a 6-digit code
+        const query = 'SELECT COUNT(*) FROM Users WHERE referral_code = $1';
+        const result = await client.query(query, [referralCode]);
+        if (result.rows[0].count == 0) {
+            isUnique = true;
+        }
+    }
+    return referralCode;
+}
+
+async function createUser(username, password, referralCode) {
+    const query = 'INSERT INTO Users (username, password, balance, referral_code) VALUES ($1, $2, $3, $4)';
+    await client.query(query, [username, password, 0, referralCode]);
+}
+
+async function checkUsernameExists(username) {
+    const query = 'SELECT COUNT(*) FROM Users WHERE username = $1';
+    const result = await client.query(query, [username]);
+    return result.rows[0].count > 0;
+}
+
+async function getUserByUsername(username) {
+    const query = 'SELECT * FROM Users WHERE username = $1';
+    const result = await client.query(query, [username]);
+    return result.rows[0];
 }
 
 // Handling incoming updates (messages and callbacks)
@@ -187,7 +221,7 @@ app.post('/webhook', async (req, res) => {
                 } else {
                     await addFundsToUser(chatId, session.username, amount);
                     const user = await getUserByUsername(session.username);
-                    await showWelcomeMessage(chatId, user.username, user.balance);
+                    await showWelcomeMessage(chatId, user.username, user.balance, user.referral_code);
                     delete userSessions[chatId];
                 }
             } else if (!session.username) {
@@ -220,23 +254,6 @@ async function deleteMessage(chatId, messageId) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
     });
-}
-
-async function checkUsernameExists(username) {
-    const query = 'SELECT COUNT(*) FROM Users WHERE username = $1';
-    const result = await client.query(query, [username]);
-    return result.rows[0].count > 0;
-}
-
-async function createUser(username, password) {
-    const query = 'INSERT INTO Users (username, password, balance) VALUES ($1, $2, $3)';
-    await client.query(query, [username, password, 0]);
-}
-
-async function getUserByUsername(username) {
-    const query = 'SELECT * FROM Users WHERE username = $1';
-    const result = await client.query(query, [username]);
-    return result.rows[0];
 }
 
 // Start the server
