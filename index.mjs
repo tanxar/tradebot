@@ -120,6 +120,7 @@ async function showWelcomeMessage(chatId, username, balance) {
         text: message,
         reply_markup: {
             inline_keyboard: [
+                [{ text: "Add Funds", callback_data: "add_funds" }],
                 [{ text: "Logout", callback_data: "logout" }],
             ],
         },
@@ -130,6 +131,17 @@ async function showWelcomeMessage(chatId, username, balance) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(options),
     });
+}
+
+async function handleAddFunds(chatId) {
+    await sendMessage(chatId, "Please enter the amount you would like to add:");
+    userSessions[chatId] = { action: 'add_funds' };
+}
+
+async function addFundsToUser(chatId, username, amount) {
+    const query = 'UPDATE Users SET balance = balance + $1 WHERE username = $2';
+    await client.query(query, [amount, username]);
+    await sendMessage(chatId, `Added ${amount} to your account.`);
 }
 
 // Handling incoming updates (messages and callbacks)
@@ -145,6 +157,8 @@ app.post('/webhook', async (req, res) => {
             await askForUsername(chatId, data);
         } else if (data === 'logout') {
             await sendMessage(chatId, "You have been logged out.");
+        } else if (data === 'add_funds') {
+            await handleAddFunds(chatId);
         }
     }
 
@@ -155,7 +169,17 @@ app.post('/webhook', async (req, res) => {
         if (userSessions[chatId]) {
             const session = userSessions[chatId];
 
-            if (!session.username) {
+            if (session.action === 'add_funds') {
+                const amount = parseFloat(text);
+                if (isNaN(amount) || amount <= 0) {
+                    await sendMessage(chatId, "Please enter a valid amount.");
+                } else {
+                    await addFundsToUser(chatId, session.username, amount);
+                    const user = await getUserByUsername(session.username);
+                    await showWelcomeMessage(chatId, user.username, user.balance);
+                    delete userSessions[chatId];
+                }
+            } else if (!session.username) {
                 await handleUsernameResponse(chatId, text);
             } else {
                 await handlePasswordResponse(chatId, text);
