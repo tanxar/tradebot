@@ -1,7 +1,7 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const fetch = require('node-fetch');
-const { Client } = require('pg');
+import express from 'express';
+import bodyParser from 'body-parser';
+import fetch from 'node-fetch';
+import { Client } from 'pg';
 
 // Create Express app
 const app = express();
