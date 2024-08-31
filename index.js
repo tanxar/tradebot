@@ -15,7 +15,7 @@ client.connect();
 
 // Telegram bot API token and webhook URL
 const TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
-const WEBHOOK_URL = 'https://ftheiromai.onrender.com/webhook';
+const WEBHOOK_URL = 'https://dedouleveitipota.onrender.com/webhook';
 
 // Set up the webhook
 fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
