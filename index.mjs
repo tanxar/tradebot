@@ -1,9 +1,9 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
-import pkg from 'pg';  // Import the entire 'pg' package
+import pkg from 'pg';
 
-const { Client } = pkg;  // Destructure the Client from the package
+const { Client } = pkg;
 
 // Create Express app
 const app = express();
@@ -28,36 +28,138 @@ fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
 // Handle incoming messages
 app.post('/webhook', async (req, res) => {
     const message = req.body.message;
+    const callbackQuery = req.body.callback_query;
 
-    if (!message || !message.text) {
-        return res.sendStatus(200);
+    if (message) {
+        const chatId = message.chat.id;
+        if (message.text === '/start') {
+            await showInitialOptions(chatId);
+        }
     }
 
-    const chatId = message.chat.id;
-    const text = message.text.trim().split(' ');
+    if (callbackQuery) {
+        const chatId = callbackQuery.message.chat.id;
+        const data = callbackQuery.data;
 
-    if (text[0] === '/register' && text.length === 3) {
-        const username = text[1];
-        const password = text[2];
-
-        try {
-            const query = 'INSERT INTO Users (username, password) VALUES ($1, $2)';
-            await client.query(query, [username, password]);
-
-            const responseText = `User ${username} registered successfully!`;
-            await sendMessage(chatId, responseText);
-        } catch (err) {
-            console.error('Error inserting into database:', err);
-            await sendMessage(chatId, 'An error occurred while registering the user.');
+        if (data === 'create_account') {
+            await askForUsername(chatId, 'create');
+        } else if (data === 'login') {
+            await askForUsername(chatId, 'login');
         }
-    } else {
-        await sendMessage(chatId, 'Please use the format /register <username> <password>');
     }
 
     res.sendStatus(200);
 });
 
-// Function to send a message
+let userSessions = {};
+
+async function showInitialOptions(chatId) {
+    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    const options = {
+        chat_id: chatId,
+        text: "Welcome! Please choose an option:",
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "Create Account", callback_data: "create_account" }],
+                [{ text: "Login", callback_data: "login" }],
+            ],
+        },
+    };
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+    });
+}
+
+async function askForUsername(chatId, action) {
+    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    const text = action === 'create' ? "Please choose a username:" : "Please enter your username:";
+
+    userSessions[chatId] = { action }; // Save the current action in the session
+
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text }),
+    });
+}
+
+async function askForPassword(chatId) {
+    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    const text = "Please enter your password:";
+
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text }),
+    });
+}
+
+async function handleUsernameResponse(chatId, text) {
+    const session = userSessions[chatId];
+
+    if (session.action === 'create') {
+        const usernameExists = await checkUsernameExists(text);
+        if (usernameExists) {
+            await sendMessage(chatId, "Username taken, please choose another:");
+        } else {
+            userSessions[chatId].username = text;
+            await askForPassword(chatId);
+        }
+    } else if (session.action === 'login') {
+        const user = await getUserByUsername(text);
+        if (user) {
+            userSessions[chatId].username = text;
+            await askForPassword(chatId);
+        } else {
+            await sendMessage(chatId, "Username not found. Please enter a valid username:");
+        }
+    }
+}
+
+async function handlePasswordResponse(chatId, text) {
+    const session = userSessions[chatId];
+
+    if (session.action === 'create') {
+        const username = session.username;
+        await createUser(username, text);
+        await sendMessage(chatId, `Account created successfully! Welcome, ${username}.`);
+        delete userSessions[chatId];
+    } else if (session.action === 'login') {
+        const user = await getUserByUsername(session.username);
+        if (user && user.password === text) {
+            await sendMessage(chatId, `Login successful! Welcome back, ${user.username}.`);
+            delete userSessions[chatId];
+        } else {
+            await sendMessage(chatId, "Incorrect password. Please try again:");
+        }
+    }
+}
+
+app.post('/webhook', async (req, res) => {
+    const message = req.body.message;
+
+    if (message) {
+        const chatId = message.chat.id;
+        const text = message.text;
+
+        if (userSessions[chatId]) {
+            const session = userSessions[chatId];
+
+            if (!session.username) {
+                await handleUsernameResponse(chatId, text);
+            } else {
+                await handlePasswordResponse(chatId, text);
+            }
+        } else if (text === '/start') {
+            await showInitialOptions(chatId);
+        }
+    }
+
+    res.sendStatus(200);
+});
+
 async function sendMessage(chatId, text) {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
     await fetch(url, {
@@ -65,6 +167,23 @@ async function sendMessage(chatId, text) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text }),
     });
+}
+
+async function checkUsernameExists(username) {
+    const query = 'SELECT COUNT(*) FROM Users WHERE username = $1';
+    const result = await client.query(query, [username]);
+    return result.rows[0].count > 0;
+}
+
+async function createUser(username, password) {
+    const query = 'INSERT INTO Users (username, password, balance) VALUES ($1, $2, $3)';
+    await client.query(query, [username, password, 0]);
+}
+
+async function getUserByUsername(username) {
+    const query = 'SELECT * FROM Users WHERE username = $1';
+    const result = await client.query(query, [username]);
+    return result.rows[0];
 }
 
 // Start the server
