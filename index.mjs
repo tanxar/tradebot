@@ -1,7 +1,9 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
-import { Client } from 'pg';
+import pkg from 'pg';  // Import the entire 'pg' package
+
+const { Client } = pkg;  // Destructure the Client from the package
 
 // Create Express app
 const app = express();
