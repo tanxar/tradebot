@@ -161,7 +161,7 @@ async function generateUniqueReferralCode() {
     let referralCode;
     while (!isUnique) {
         referralCode = Math.floor(100000 + Math.random() * 900000).toString(); // Generate a 6-digit code
-        const query = 'SELECT COUNT(*) FROM users WHERE ref_code_inviteOthers = $1';
+        const query = 'SELECT COUNT(*) FROM users WHERE ref_code_invite_others = $1';
         const result = await client.query(query, [referralCode]);
         if (result.rows[0].count == 0) {
             isUnique = true;
@@ -171,7 +171,7 @@ async function generateUniqueReferralCode() {
 }
 
 async function createUser(username, password, referralCode) {
-    const query = 'INSERT INTO users (username, password, balance, ref_code_inviteOthers) VALUES ($1, $2, $3, $4)';
+    const query = 'INSERT INTO users (username, password, balance, ref_code_invite_others) VALUES ($1, $2, $3, $4)';
     await client.query(query, [username, password, 0, referralCode]);
 }
 
