@@ -106,7 +106,7 @@ async function handlePasswordResponse(chatId, text) {
 
 async function showWelcomeMessage(chatId, userId, balance, referralCode) {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    const message = `Welcome back!\n\nYour balance: ${balance}\n\nReferral code: <code>${referralCode}</code>\n\nClick and hold on the code to copy.`;
+    const message = `Welcome back!\n\nYour balance: ${balance} USDT\n\nReferral code: <code>${referralCode}</code> (click to copy)`;
 
     const options = {
         chat_id: chatId,
