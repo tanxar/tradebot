@@ -27,88 +27,74 @@ fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
 
 let userSessions = {};
 
-async function showInitialOptions(chatId) {
+async function showInitialOptions(chatId, userId, firstName) {
+    const userExists = await checkUserExists(userId);
+    let options;
+
+    if (userExists) {
+        const user = await getUserByTelegramId(userId);
+        const message = `Welcome back, ${firstName}!\nTelegram ID: ${userId}`;
+        options = {
+            chat_id: chatId,
+            text: message,
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: "Login", callback_data: "login" }],
+                ],
+            },
+        };
+    } else {
+        const message = "Welcome! Please choose an option:";
+        options = {
+            chat_id: chatId,
+            text: message,
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: "Create Account", callback_data: "create_account" }],
+                    [{ text: "Login", callback_data: "login" }],
+                ],
+            },
+        };
+    }
+
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    const options = {
-        chat_id: chatId,
-        text: "Welcome! Please choose an option:",
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "Create Account", callback_data: "create_account" }],
-                [{ text: "Login", callback_data: "login" }],
-            ],
-        },
-    };
-    const response = await fetch(url, {
+    await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(options),
     });
-    const data = await response.json();
-    return data.message_id;
 }
 
-async function askForUsername(chatId, action, messageId) {
-    await deleteMessage(chatId, messageId);
+async function askForPassword(chatId, userId, action) {
+    const message = `Your username is: <code>${userId}</code>\nPlease choose a password:`;
+    userSessions[chatId] = { action, userId }; // Save the userId and action in the session
+
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    const text = action === 'create_account' ? "Please choose a username:" : "Please enter your username:";
-
-    userSessions[chatId] = { action }; // Save the current action in the session
-
     await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text }),
+        body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+            parse_mode: 'HTML',
+        }),
     });
-}
-
-async function askForPassword(chatId) {
-    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    const text = "Please enter your password:";
-
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text }),
-    });
-}
-
-async function handleUsernameResponse(chatId, text) {
-    const session = userSessions[chatId];
-
-    if (session.action === 'create_account') {
-        const usernameExists = await checkUsernameExists(text);
-        if (usernameExists) {
-            await sendMessage(chatId, "Username taken, please choose another:");
-        } else {
-            userSessions[chatId].username = text;
-            await askForPassword(chatId);
-        }
-    } else if (session.action === 'login') {
-        const user = await getUserByUsername(text);
-        if (user) {
-            userSessions[chatId].username = text;
-            await askForPassword(chatId);
-        } else {
-            await sendMessage(chatId, "Username not found. Please enter a valid username:");
-        }
-    }
 }
 
 async function handlePasswordResponse(chatId, text) {
     const session = userSessions[chatId];
 
     if (session.action === 'create_account') {
-        const username = session.username;
+        const userId = session.userId;
         const referralCode = await generateUniqueReferralCode();
-        await createUser(username, text, referralCode);
-        const user = await getUserByUsername(username);
-        await showWelcomeMessage(chatId, user.username, user.balance, user.referral_code);
+        await createUser(userId, text, referralCode);
+        const user = await getUserByTelegramId(userId);
+        await showWelcomeMessage(chatId, userId, user.balance, user.referral_code);
         delete userSessions[chatId];
     } else if (session.action === 'login') {
-        const user = await getUserByUsername(session.username);
+        const user = await getUserByTelegramId(session.userId);
         if (user && user.password === text) {
-            await showWelcomeMessage(chatId, user.username, user.balance, user.referral_code);
+            await showWelcomeMessage(chatId, session.userId, user.balance, user.referral_code);
             delete userSessions[chatId];
         } else {
             await sendMessage(chatId, "Incorrect password. Please try again:");
@@ -116,9 +102,9 @@ async function handlePasswordResponse(chatId, text) {
     }
 }
 
-async function showWelcomeMessage(chatId, username, balance, referralCode) {
+async function showWelcomeMessage(chatId, userId, balance, referralCode) {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    const message = `Welcome back, ${username}!\n\nYour balance: ${balance}\n\nReferral code: <code>${referralCode}</code>\n\nClick and hold on the code to copy.`;
+    const message = `Welcome back!\nYour balance: ${balance}\nReferral code: <code>${referralCode}</code>\n\nClick and hold on the code to copy.`;
 
     const options = {
         chat_id: chatId,
@@ -147,12 +133,12 @@ async function handleAddFunds(chatId) {
 async function handleLogout(chatId, messageId) {
     await deleteMessage(chatId, messageId);
     await sendMessage(chatId, "You have been logged out.");
-    await showInitialOptions(chatId); // Restart the bot by showing the initial options again
+    await showInitialOptions(chatId, userSessions[chatId].userId, userSessions[chatId].firstName);
 }
 
-async function addFundsToUser(chatId, username, amount) {
-    const query = 'UPDATE Users SET balance = balance + $1 WHERE username = $2';
-    await client.query(query, [amount, username]);
+async function addFundsToUser(chatId, userId, amount) {
+    const query = 'UPDATE Users SET balance = balance + $1 WHERE telegram_id = $2';
+    await client.query(query, [amount, userId]);
     await sendMessage(chatId, `Added ${amount} to your account.`);
 }
 
@@ -171,20 +157,20 @@ async function generateUniqueReferralCode() {
     return referralCode;
 }
 
-async function createUser(username, password, referralCode) {
-    const query = 'INSERT INTO Users (username, password, balance, referral_code) VALUES ($1, $2, $3, $4)';
-    await client.query(query, [username, password, 0, referralCode]);
+async function createUser(telegramId, password, referralCode) {
+    const query = 'INSERT INTO Users (telegram_id, password, balance, referral_code) VALUES ($1, $2, $3, $4)';
+    await client.query(query, [telegramId, password, 0, referralCode]);
 }
 
-async function checkUsernameExists(username) {
-    const query = 'SELECT COUNT(*) FROM Users WHERE username = $1';
-    const result = await client.query(query, [username]);
+async function checkUserExists(telegramId) {
+    const query = 'SELECT COUNT(*) FROM Users WHERE telegram_id = $1';
+    const result = await client.query(query, [telegramId]);
     return result.rows[0].count > 0;
 }
 
-async function getUserByUsername(username) {
-    const query = 'SELECT * FROM Users WHERE username = $1';
-    const result = await client.query(query, [username]);
+async function getUserByTelegramId(telegramId) {
+    const query = 'SELECT * FROM Users WHERE telegram_id = $1';
+    const result = await client.query(query, [telegramId]);
     return result.rows[0];
 }
 
@@ -196,10 +182,16 @@ app.post('/webhook', async (req, res) => {
     if (callbackQuery) {
         const chatId = callbackQuery.message.chat.id;
         const messageId = callbackQuery.message.message_id;
+        const userId = callbackQuery.from.id;
+        const firstName = callbackQuery.from.first_name;
         const data = callbackQuery.data;
 
-        if (data === 'create_account' || data === 'login') {
-            await askForUsername(chatId, data, messageId);
+        userSessions[chatId] = { userId, firstName };
+
+        if (data === 'create_account') {
+            await askForPassword(chatId, userId, data);
+        } else if (data === 'login') {
+            await askForPassword(chatId, userId, data);
         } else if (data === 'logout') {
             await handleLogout(chatId, messageId);
         } else if (data === 'add_funds') {
@@ -209,6 +201,8 @@ app.post('/webhook', async (req, res) => {
 
     if (message) {
         const chatId = message.chat.id;
+        const userId = message.from.id;
+        const firstName = message.from.first_name;
         const text = message.text;
 
         if (userSessions[chatId]) {
@@ -219,19 +213,16 @@ app.post('/webhook', async (req, res) => {
                 if (isNaN(amount) || amount <= 0) {
                     await sendMessage(chatId, "Please enter a valid amount.");
                 } else {
-                    await addFundsToUser(chatId, session.username, amount);
-                    const user = await getUserByUsername(session.username);
-                    await showWelcomeMessage(chatId, user.username, user.balance, user.referral_code);
+                    await addFundsToUser(chatId, session.userId, amount);
+                    const user = await getUserByTelegramId(session.userId);
+                    await showWelcomeMessage(chatId, session.userId, user.balance, user.referral_code);
                     delete userSessions[chatId];
                 }
-            } else if (!session.username) {
-                await handleUsernameResponse(chatId, text);
-            } else {
+            } else if (session.action === 'create_account' || session.action === 'login') {
                 await handlePasswordResponse(chatId, text);
             }
         } else if (text === '/start') {
-            const initialMessageId = await showInitialOptions(chatId);
-            userSessions[chatId] = { initialMessageId };
+            await showInitialOptions(chatId, userId, firstName);
         }
     }
 
