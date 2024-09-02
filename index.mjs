@@ -89,12 +89,14 @@ async function handlePasswordResponse(chatId, text) {
         const referralCode = await generateUniqueReferralCode();
         await createUser(userId, text, referralCode);
         const user = await getUserByTelegramId(userId);
-        await showWelcomeMessage(chatId, userId, user.balance, user.referral_code);
+        console.log('Referral code during account creation:', user.ref_code_invite_others); // Debugging line
+        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others); // Pass referral code here
         delete userSessions[chatId];
     } else if (session.action === 'login') {
         const user = await getUserByTelegramId(session.userId);
+        console.log('Referral code during login:', user.ref_code_invite_others); // Debugging line
         if (user && user.password === text) {
-            await showWelcomeMessage(chatId, session.userId, user.balance, user.referral_code);
+            await showWelcomeMessage(chatId, session.userId, user.balance, user.ref_code_invite_others); // Pass referral code here
             delete userSessions[chatId];
         } else {
             await sendMessage(chatId, "Incorrect password. Please try again:");
@@ -216,7 +218,7 @@ app.post('/webhook', async (req, res) => {
                 } else {
                     await addFundsToUser(chatId, session.userId, amount);
                     const user = await getUserByTelegramId(session.userId);
-                    await showWelcomeMessage(chatId, session.userId, user.balance, user.referral_code);
+                    await showWelcomeMessage(chatId, session.userId, user.balance, user.ref_code_invite_others);
                     delete userSessions[chatId];
                 }
             } else if (session.action === 'create_account' || session.action === 'login') {
