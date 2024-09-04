@@ -1,7 +1,7 @@
 {
   "name": "telegram-bot",
   "version": "1.0.0",
-  "description": "Telegram bot to register users using webhook and PostgreSQL.",
+  "description": "Telegram bot to register users using webhook, Solana wallet generation, USDT monitoring, and PostgreSQL.",
   "main": "index.mjs",
   "type": "module",
   "scripts": {
@@ -11,6 +11,7 @@
     "body-parser": "^1.19.0",
     "express": "^4.18.2",
     "node-fetch": "^3.3.1",
-    "pg": "^8.11.0"
+    "pg": "^8.11.0",
+    "@solana/web3.js": "^1.73.2"  // Add the Solana web3.js library
   }
 }
