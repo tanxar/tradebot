@@ -63,6 +63,11 @@ async function showInitialOptions(chatId, userId, firstName) {
     });
 }
 
+async function showPostLoginOptions(chatId, userId) {
+    const user = await getUserByTelegramId(userId);
+    await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others); // Pass referral code
+}
+
 async function askForPassword(chatId, userId, action) {
     const message = action === 'create_account' 
         ? "Choose a password to create your account:" 
@@ -106,7 +111,7 @@ async function handlePasswordResponse(chatId, text) {
 
 async function showWelcomeMessage(chatId, userId, balance, referralCode) {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    const message = `Welcome back!\n\nYour balance: ${balance} USDT\n\nReferral code: <code>${referralCode}</code> (click to copy)`;
+    const message = `Welcome back!\n\nYour balance: ${balance}\n\nReferral code: <code>${referralCode}</code>\n\nClick and hold on the code to copy.`;
 
     const options = {
         chat_id: chatId,
@@ -208,7 +213,9 @@ app.post('/webhook', async (req, res) => {
         const firstName = message.from.first_name;
         const text = message.text;
 
-        if (userSessions[chatId]) {
+        if (text === '/restart') {
+            await showPostLoginOptions(chatId, userId); // Handle restart by showing post-login options
+        } else if (userSessions[chatId]) {
             const session = userSessions[chatId];
 
             if (session.action === 'add_funds') {
