@@ -2,6 +2,7 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 import pkg from 'pg';
+import * as solanaWeb3 from '@solana/web3.js'; // Solana SDK for wallet generation
 
 const { Client } = pkg;
 
@@ -19,7 +20,7 @@ client.connect();
 const TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
 const WEBHOOK_URL = 'https://dedouleveitipota.onrender.com/webhook';
 
-// Set up the webhook
+// Set up the webhook for Telegram bot
 fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
     .then(res => res.json())
     .then(json => console.log(json))
@@ -27,6 +28,83 @@ fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
 
 let userSessions = {};
 
+// Solana USDT Mint Address
+const usdtMintAddress = 'Es9vMFrzdQvAx2eWtS5tybVopF3WQihDnm1HmwW8VaMF';
+
+// Function to generate a Solana wallet
+async function generateSolanaWallet() {
+    const keypair = solanaWeb3.Keypair.generate(); // Generates a new keypair
+    const publicKey = keypair.publicKey.toString();
+    const privateKey = Buffer.from(keypair.secretKey).toString('base64'); // Save the private key securely
+    return { publicKey, privateKey };
+}
+
+// Save the generated wallet in the database
+async function saveUserWallet(telegramId, publicKey, privateKey) {
+    const query = 'UPDATE users SET sol_wallet_address = $1, sol_wallet_private_key = $2 WHERE telegram_id = $3';
+    await client.query(query, [publicKey, privateKey, telegramId]);
+}
+
+// Monitor USDT transactions to the generated wallet address
+async function monitorUSDTTransactions(walletAddress, telegramId) {
+    const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
+
+    const latestSignature = await connection.getConfirmedSignaturesForAddress2(
+        new solanaWeb3.PublicKey(walletAddress),
+        { limit: 1 }
+    );
+
+    if (latestSignature.length > 0) {
+        const transaction = await connection.getParsedConfirmedTransaction(latestSignature[0].signature);
+        const tokenTransfers = transaction.meta?.postTokenBalances || [];
+
+        tokenTransfers.forEach(transfer => {
+            if (transfer.mint === usdtMintAddress) {
+                const amount = transfer.uiTokenAmount.uiAmount;
+                console.log(`USDT received: ${amount}`);
+                updateUserBalance(telegramId, amount);
+            }
+        });
+    }
+}
+
+// Update user balance in the database
+async function updateUserBalance(telegramId, amount) {
+    const query = 'UPDATE users SET balance = balance + $1 WHERE telegram_id = $2';
+    await client.query(query, [amount, telegramId]);
+}
+
+// Handle "Add Funds" when a user clicks the button
+async function handleAddFunds(chatId, telegramId) {
+    const wallet = await generateSolanaWallet(); // Generate a unique wallet
+    await saveUserWallet(telegramId, wallet.publicKey, wallet.privateKey);
+
+    await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${wallet.publicKey}</code>`, 'HTML');
+
+    // You can monitor the wallet for incoming USDT transactions periodically
+    setInterval(async () => {
+        await monitorUSDTTransactions(wallet.publicKey, telegramId);
+    }, 60000); // Check every minute for incoming transactions
+}
+
+// Show the user's updated balance after receiving USDT
+async function showUpdatedBalance(chatId, telegramId) {
+    const user = await getUserByTelegramId(telegramId);
+    const balance = user.balance;
+    await sendMessage(chatId, `Your updated balance: ${balance} USDT`);
+}
+
+// Function to send a message via Telegram
+async function sendMessage(chatId, text, parseMode = 'Markdown') {
+    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
+    });
+}
+
+// Show initial options to the user (Create Account, Login)
 async function showInitialOptions(chatId, userId, firstName) {
     const userExists = await checkUserExists(userId);
     let options;
@@ -63,94 +141,27 @@ async function showInitialOptions(chatId, userId, firstName) {
     });
 }
 
-async function showPostLoginOptions(chatId, userId) {
-    const user = await getUserByTelegramId(userId);
-    await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others); // Pass referral code
+// Get user data by Telegram ID
+async function getUserByTelegramId(telegramId) {
+    const query = 'SELECT * FROM users WHERE telegram_id = $1';
+    const result = await client.query(query, [telegramId]);
+    return result.rows[0];
 }
 
-async function askForPassword(chatId, userId, action) {
-    const message = action === 'create_account' 
-        ? "Choose a password to create your account:" 
-        : "Please enter your password to login:";
-    
-    userSessions[chatId] = { action, userId }; // Save the userId and action in the session
-
-    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            chat_id: chatId,
-            text: message,
-        }),
-    });
+// Create a new user with a generated Solana address
+async function createUser(telegramId, password, referralCode) {
+    const query = 'INSERT INTO users (telegram_id, password, balance, ref_code_invite_others) VALUES ($1, $2, $3, $4)';
+    await client.query(query, [telegramId, password, 0, referralCode]);
 }
 
-async function handlePasswordResponse(chatId, text) {
-    const session = userSessions[chatId];
-
-    if (session.action === 'create_account') {
-        const userId = session.userId;
-        const referralCode = await generateUniqueReferralCode();
-        await createUser(userId, text, referralCode);
-        const user = await getUserByTelegramId(userId);
-        console.log('Referral code during account creation:', user.ref_code_invite_others); // Debugging line
-        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others); // Pass referral code here
-        delete userSessions[chatId];
-    } else if (session.action === 'login') {
-        const user = await getUserByTelegramId(session.userId);
-        console.log('Referral code during login:', user.ref_code_invite_others); // Debugging line
-        if (user && user.password === text) {
-            await showWelcomeMessage(chatId, session.userId, user.balance, user.ref_code_invite_others); // Pass referral code here
-            delete userSessions[chatId];
-        } else {
-            await sendMessage(chatId, "Incorrect password. Please try again:");
-        }
-    }
+// Check if user exists in the database
+async function checkUserExists(telegramId) {
+    const query = 'SELECT COUNT(*) FROM users WHERE telegram_id = $1';
+    const result = await client.query(query, [telegramId]);
+    return result.rows[0].count > 0;
 }
 
-async function showWelcomeMessage(chatId, userId, balance, referralCode) {
-    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    const message = `Welcome back!\n\nYour balance: ${balance}\n\nReferral code: <code>${referralCode}</code>\n\nClick and hold on the code to copy.`;
-
-    const options = {
-        chat_id: chatId,
-        text: message,
-        parse_mode: 'HTML', // Enable HTML mode to format the referral code
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "Add Funds", callback_data: "add_funds" }],
-                [{ text: "Logout", callback_data: "logout" }],
-            ],
-        },
-    };
-
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
-    });
-}
-
-async function handleAddFunds(chatId) {
-    await sendMessage(chatId, "Please enter the amount you would like to add:");
-    userSessions[chatId] = { action: 'add_funds' };
-}
-
-async function handleLogout(chatId, messageId) {
-    await deleteMessage(chatId, messageId);
-    await sendMessage(chatId, "You have been logged out.");
-    const { userId, firstName } = userSessions[chatId];
-    await showInitialOptions(chatId, userId, firstName);
-}
-
-async function addFundsToUser(chatId, userId, amount) {
-    const query = 'UPDATE users SET balance = balance + $1 WHERE telegram_id = $2';
-    await client.query(query, [amount, userId]);
-    await sendMessage(chatId, `Added ${amount} to your account.`);
-}
-
-// Function to generate a unique 6-digit referral code
+// Generate a unique referral code
 async function generateUniqueReferralCode() {
     let isUnique = false;
     let referralCode;
@@ -163,23 +174,6 @@ async function generateUniqueReferralCode() {
         }
     }
     return referralCode;
-}
-
-async function createUser(telegramId, password, referralCode) {
-    const query = 'INSERT INTO users (telegram_id, password, balance, ref_code_invite_others) VALUES ($1, $2, $3, $4)';
-    await client.query(query, [telegramId, password, 0, referralCode]);
-}
-
-async function checkUserExists(telegramId) {
-    const query = 'SELECT COUNT(*) FROM users WHERE telegram_id = $1';
-    const result = await client.query(query, [telegramId]);
-    return result.rows[0].count > 0;
-}
-
-async function getUserByTelegramId(telegramId) {
-    const query = 'SELECT * FROM users WHERE telegram_id = $1';
-    const result = await client.query(query, [telegramId]);
-    return result.rows[0];
 }
 
 // Handling incoming updates (messages and callbacks)
@@ -200,10 +194,8 @@ app.post('/webhook', async (req, res) => {
             await askForPassword(chatId, userId, data);
         } else if (data === 'login') {
             await askForPassword(chatId, userId, data);
-        } else if (data === 'logout') {
-            await handleLogout(chatId, messageId);
         } else if (data === 'add_funds') {
-            await handleAddFunds(chatId);
+            await handleAddFunds(chatId, userId);
         }
     }
 
@@ -213,49 +205,13 @@ app.post('/webhook', async (req, res) => {
         const firstName = message.from.first_name;
         const text = message.text;
 
-        if (text === '/restart') {
-            await showPostLoginOptions(chatId, userId); // Handle restart by showing post-login options
-        } else if (userSessions[chatId]) {
-            const session = userSessions[chatId];
-
-            if (session.action === 'add_funds') {
-                const amount = parseFloat(text);
-                if (isNaN(amount) || amount <= 0) {
-                    await sendMessage(chatId, "Please enter a valid amount.");
-                } else {
-                    await addFundsToUser(chatId, session.userId, amount);
-                    const user = await getUserByTelegramId(session.userId);
-                    await showWelcomeMessage(chatId, session.userId, user.balance, user.ref_code_invite_others);
-                    delete userSessions[chatId];
-                }
-            } else if (session.action === 'create_account' || session.action === 'login') {
-                await handlePasswordResponse(chatId, text);
-            }
-        } else if (text === '/start') {
+        if (text === '/start') {
             await showInitialOptions(chatId, userId, firstName);
         }
     }
 
     res.sendStatus(200);
 });
-
-async function sendMessage(chatId, text) {
-    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text }),
-    });
-}
-
-async function deleteMessage(chatId, messageId) {
-    const url = `https://api.telegram.org/bot${TOKEN}/deleteMessage`;
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
-    });
-}
 
 // Start the server
 const PORT = process.env.PORT || 3000;
