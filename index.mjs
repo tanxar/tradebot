@@ -176,6 +176,25 @@ async function generateUniqueReferralCode() {
     return referralCode;
 }
 
+// Function to ask the user for a password during account creation or login
+async function askForPassword(chatId, userId, action) {
+    const message = action === 'create_account'
+        ? "Please choose a password to create your account:"
+        : "Please enter your password to log in:";
+    
+    userSessions[chatId] = { action, userId }; // Save the userId and action in the session
+
+    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+        }),
+    });
+}
+
 // Handling incoming updates (messages and callbacks)
 app.post('/webhook', async (req, res) => {
     const message = req.body.message;
