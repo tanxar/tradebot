@@ -80,7 +80,17 @@ async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userI
                 }
             }
         } else {
-            console.log(`No USDT token accounts found for wallet ${walletAddress}`);
+            console.log(`No USDT token accounts found for wallet ${walletAddress}. Creating token account...`);
+
+            // Create an associated token account if it doesn't exist
+            await getOrCreateAssociatedTokenAccount(
+                connection,
+                keypair,
+                usdtMintAddress,
+                new solanaWeb3.PublicKey(walletAddress)
+            );
+
+            console.log(`Token account created for wallet ${walletAddress}`);
         }
     } catch (error) {
         console.error(`Error while monitoring wallet ${walletAddress}:`, error.message);
