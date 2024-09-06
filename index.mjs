@@ -30,103 +30,85 @@ fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
     .then(json => console.log(json))
     .catch(err => console.error('Error setting webhook:', err));
 
-// Object to hold user sessions
-let userSessions = {};
-
 // USDT Mint Address on Solana
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
 // Phantom wallet address (where USDT will be transferred)
 const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; // Replace with your actual Phantom wallet address
 
-// Function to monitor USDT transactions and transfer to Phantom Wallet
-async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userId, lastSignature = null) {
-    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
-
+// Function to monitor USDT transactions and update balance
+async function monitorUSDTTransactions(walletAddress, userId) {
     try {
-        if (!solWalletPrivateKey || solWalletPrivateKey.length === 0) {
-            throw new Error("Private key is empty or undefined.");
-        }
+        console.log(`Monitoring wallet ${walletAddress} for USDT balance updates`);
 
-        const privateKeyBytes = bs58.decode(solWalletPrivateKey); // Decode base58 private key
-        const keypair = solanaWeb3.Keypair.fromSecretKey(privateKeyBytes);
+        // Fetch the current USDT balance (Assumed via Solscan or another source)
+        const usdtBalance = await getUSDTBalance(walletAddress);
 
-        console.log(`Monitoring wallet ${walletAddress} for USDT transactions`);
+        if (usdtBalance > 0) {
+            const lastSignature = await getLastTransactionSignature(userId);
 
-        // Get the token accounts for USDT owned by this wallet
-        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-            new solanaWeb3.PublicKey(walletAddress),
-            { mint: usdtMintAddress }
-        );
+            console.log(`USDT balance detected: ${usdtBalance}`);
 
-        if (tokenAccounts.value.length > 0) {
-            const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
-            const balance = tokenAccount.tokenAmount.uiAmount;
+            await client.query('BEGIN'); // Begin transaction
 
-            console.log(`USDT balance in the wallet: ${balance} USDT`);
+            await saveTransactionToDatabase(userId, walletAddress, usdtBalance, lastSignature);
+            await updateUserBalance(userId, usdtBalance);
 
-            if (balance > 0) {
-                const signatureOptions = lastSignature ? { until: lastSignature, limit: 5 } : { limit: 5 };
-                const signatures = await connection.getConfirmedSignaturesForAddress2(
-                    new solanaWeb3.PublicKey(walletAddress),
-                    signatureOptions
-                );
+            const amountToTransfer = Math.floor(usdtBalance * 10 ** 6); // Convert to smallest unit (Lamports for USDT)
+            await transferUSDTToPhantomWallet(walletAddress, amountToTransfer);
 
-                console.log("Retrieved Signatures:", signatures);
+            await updateLastTransactionSignature(userId, lastSignature);
+            await client.query('COMMIT'); // Commit transaction
 
-                for (const signatureInfo of signatures) {
-                    const signature = signatureInfo.signature;
-                    const isTransactionAlreadyProcessed = await checkTransactionExists(signature);
-
-                    if (!isTransactionAlreadyProcessed) {
-                        console.log(`Processing new transaction with signature: ${signature}`);
-
-                        // Save transaction and update user's balance
-                        await client.query('BEGIN');  // Start a transaction
-
-                        try {
-                            await saveTransactionToDatabase(userId, walletAddress, balance, signature);
-                            await updateUserBalance(userId, balance);
-
-                            // Transfer to Phantom Wallet
-                            const amountToTransfer = Math.floor(balance * 10 ** 6); // Convert to smallest unit (Lamports for USDT)
-                            await transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, amountToTransfer);
-
-                            await updateLastTransactionSignature(userId, signature);
-                            await client.query('COMMIT');  // Commit the transaction
-
-                            console.log(`Transaction successfully processed and user balance updated for user ${userId}`);
-                        } catch (err) {
-                            await client.query('ROLLBACK');  // Rollback if anything goes wrong
-                            console.error(`Error processing transaction ${signature}:`, err.message);
-                        }
-                    }
-                }
-            } else {
-                console.log(`Balance is too low to initiate a transfer.`);
-            }
+            console.log(`Balance updated and transferred to Phantom wallet for user ${userId}`);
         } else {
-            console.log(`No USDT token accounts found for wallet ${walletAddress}. Creating token account...`);
-
-            await getOrCreateAssociatedTokenAccount(
-                connection,
-                keypair,
-                usdtMintAddress,
-                new solanaWeb3.PublicKey(walletAddress)
-            );
-
-            console.log(`Token account created for wallet ${walletAddress}`);
+            console.log(`No USDT balance detected for wallet ${walletAddress}`);
         }
     } catch (error) {
-        console.error(`Error while monitoring wallet ${walletAddress}:`, error.message);
+        console.error(`Error monitoring USDT transactions: ${error.message}`);
+        await client.query('ROLLBACK');
     }
 }
 
-// Check if the transaction signature is already saved in the database
-async function checkTransactionExists(signature) {
-    const query = 'SELECT COUNT(*) FROM usdt_transactions WHERE signature = $1';
-    const result = await client.query(query, [signature]);
-    return result.rows[0].count > 0;
+// Function to transfer USDT to Phantom Wallet
+async function transferUSDTToPhantomWallet(walletAddress, amount) {
+    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+    const usdtMintPublicKey = new solanaWeb3.PublicKey(usdtMintAddress);
+
+    const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
+        connection,
+        walletAddress,  // Provide wallet's public key
+        usdtMintPublicKey,
+        walletAddress // Same public key here
+    );
+
+    const toTokenAccount = await getOrCreateAssociatedTokenAccount(
+        connection,
+        walletAddress,  // Provide keypair
+        usdtMintPublicKey,
+        new solanaWeb3.PublicKey(phantomWalletAddress) // Phantom wallet public key
+    );
+
+    if (amount > 0) {
+        const signature = await transfer(
+            connection,
+            walletAddress,
+            fromTokenAccount.address,
+            toTokenAccount.address,
+            walletAddress,
+            amount
+        );
+
+        console.log(`USDT transferred to Phantom wallet. Transaction signature: ${signature}`);
+    } else {
+        console.log("Transfer amount is zero or invalid.");
+    }
+}
+
+// Update the last known transaction signature for the user
+async function updateLastTransactionSignature(userId, signature) {
+    const query = `UPDATE users SET last_transaction_signature = $1 WHERE id = $2`;
+    await client.query(query, [signature, userId]);
 }
 
 // Save USDT transaction details to the database
@@ -151,47 +133,16 @@ async function updateUserBalance(userId, amount) {
     }
 }
 
-// Function to transfer USDT to the Phantom Wallet
-async function transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, amount) {
-    const phantomPublicKey = new solanaWeb3.PublicKey(phantomWalletAddress);
-    const usdtMintPublicKey = new solanaWeb3.PublicKey(usdtMintAddress);
+// Function to get the last transaction signature for a user
+async function getLastTransactionSignature(userId) {
+    const query = `SELECT last_transaction_signature FROM users WHERE id = $1`;
+    const result = await client.query(query, [userId]);
 
-    const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        keypair,
-        usdtMintPublicKey,
-        keypair.publicKey
-    );
-
-    const toTokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        keypair,
-        usdtMintPublicKey,
-        phantomPublicKey
-    );
-
-    if (amount > 0) {
-        console.log(`Initiating transfer of ${amount / 10 ** 6} USDT to Phantom wallet.`);
-
-        const signature = await transfer(
-            connection,
-            keypair,
-            fromTokenAccount.address,
-            toTokenAccount.address,
-            keypair,
-            amount
-        );
-
-        console.log(`USDT transferred to Phantom wallet. Transaction signature: ${signature}`);
-    } else {
-        console.log("Transfer amount is zero or invalid.");
+    if (result.rows.length > 0) {
+        return result.rows[0].last_transaction_signature;
     }
-}
 
-// Update the last known transaction signature for the user
-async function updateLastTransactionSignature(userId, signature) {
-    const query = `UPDATE users SET last_transaction_signature = $1 WHERE id = $2`;
-    await client.query(query, [signature, userId]);
+    return null;
 }
 
 // Handle incoming updates (messages and callbacks)
@@ -404,7 +355,7 @@ async function handleAddFunds(chatId, telegramId) {
     await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
 
     setInterval(async () => {
-        await monitorUSDTTransactions(solWalletAddress, solWalletPrivateKey, user.id, user.last_transaction_signature);
+        await monitorUSDTTransactions(solWalletAddress, user.id);
     }, 15000);
 }
 
