@@ -39,12 +39,25 @@ const usdtMintAddress = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
 // Phantom wallet address (where USDT will be transferred)
 const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; // Replace with your actual Phantom wallet address
 
-// Function to fetch USDT balance from Solscan for a user's Solana wallet
+// Your Solscan API key
+const solscanApiKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkQXQiOjE3MjU2NjYwMTE4NDUsImVtYWlsIjoiay50YW54YXJAZ21haWwuY29tIiwiYWN0aW9uIjoidG9rZW4tYXBpIiwiYXBpVmVyc2lvbiI6InYxIiwiaWF0IjoxNzI1NjY2MDExfQ.Zairm0JQucZmc9jRVn7kY-fQxKCi7qk3kltEnaPXtwQ';
+
+// Function to fetch USDT balance from Solscan for a user's Solana wallet using the API key
 async function fetchUSDTBalanceFromSolscan(walletAddress) {
     try {
-        // Correct Solscan API for fetching tokens in a wallet
         const url = `https://api.solscan.io/account/tokens?address=${walletAddress}`;
-        const response = await fetch(url);
+
+        const response = await fetch(url, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${solscanApiKey}` // Include the API key in the request header
+            }
+        });
+
+        if (response.status === 403) {
+            console.error('API key is invalid or missing. Please check your Solscan API key.');
+            return 0;
+        }
 
         if (response.status === 404) {
             console.error(`Wallet address ${walletAddress} not found on Solscan.`);
