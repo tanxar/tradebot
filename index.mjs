@@ -12,6 +12,10 @@ const { Client } = pkg;
 const app = express();
 app.use(bodyParser.json()); // Ensure body-parser is set to parse JSON requests
 
+// Object to hold user sessions
+let userSessions = {};
+
+
 // PostgreSQL client setup
 const client = new Client({
     connectionString: 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3',
