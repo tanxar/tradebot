@@ -3,7 +3,7 @@ import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 import pkg from 'pg';
 import * as solanaWeb3 from '@solana/web3.js';
-import { getOrCreateAssociatedTokenAccount, transfer } from '@solana/spl-token';
+import { getOrCreateAssociatedTokenAccount, transfer, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import bs58 from 'bs58'; // For decoding base58 private keys
 
 const { Client } = pkg;
@@ -34,52 +34,32 @@ fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
 let userSessions = {};
 
 // USDT Mint Address on Solana
-const usdtMintAddress = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
+const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
 // Phantom wallet address (where USDT will be transferred)
 const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; // Replace with your actual Phantom wallet address
 
-// Your Solscan API key
-const solscanApiKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkQXQiOjE3MjU2NjYwMTE4NDUsImVtYWlsIjoiay50YW54YXJAZ21haWwuY29tIiwiYWN0aW9uIjoidG9rZW4tYXBpIiwiYXBpVmVyc2lvbiI6InYxIiwiaWF0IjoxNzI1NjY2MDExfQ.Zairm0JQucZmc9jRVn7kY-fQxKCi7qk3kltEnaPXtwQ';
-
-// Function to fetch USDT balance from Solscan for a user's Solana wallet using the API key
-async function fetchUSDTBalanceFromSolscan(walletAddress) {
+// Function to fetch USDT balance using Solana Web3.js
+async function fetchUSDTBalanceFromSolana(walletAddress) {
     try {
-        const url = `https://api.solscan.io/account/tokens?address=${walletAddress}`;
+        const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
 
-        const response = await fetch(url, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${solscanApiKey}` // Include the API key in the request header
-            }
-        });
+        // Get all token accounts by the owner (wallet address) for USDT mint
+        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+            new solanaWeb3.PublicKey(walletAddress),
+            { mint: usdtMintAddress }
+        );
 
-        if (response.status === 403) {
-            console.error('API key is invalid or missing. Please check your Solscan API key.');
-            return 0;
-        }
-
-        if (response.status === 404) {
-            console.error(`Wallet address ${walletAddress} not found on Solscan.`);
-            return 0;
-        }
-
-        if (!response.ok) {
-            throw new Error(`Error fetching data from Solscan: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-
-        // Find the USDT balance using the mint address
-        const usdtToken = data.find(token => token.tokenAddress === usdtMintAddress);
-        if (usdtToken) {
-            return usdtToken.tokenAmount.uiAmount; // Return the USDT balance in UI readable amount
+        if (tokenAccounts.value.length > 0) {
+            const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
+            const balance = tokenAccount.tokenAmount.uiAmount;
+            return balance; // Return USDT balance
         } else {
-            console.log(`No USDT token found for wallet ${walletAddress}`);
+            console.log(`No USDT token accounts found for wallet ${walletAddress}`);
             return 0;
         }
     } catch (error) {
-        console.error(`Error fetching balance from Solscan: ${error.message}`);
+        console.error(`Error fetching USDT balance from Solana: ${error.message}`);
         return 0;
     }
 }
@@ -110,18 +90,18 @@ async function updateUserBalanceInDB(userId, newBalance) {
 // Function to monitor the user's USDT account and update balance if funds are added
 async function monitorUSDTAccountAndUpdateBalance(walletAddress, userId) {
     try {
-        // Fetch the current balance from Solscan
-        const solscanBalance = await fetchUSDTBalanceFromSolscan(walletAddress);
+        // Fetch the current balance from Solana
+        const solanaBalance = await fetchUSDTBalanceFromSolana(walletAddress);
 
         // Get the balance stored in the database
         const dbBalance = await getUserBalanceFromDB(userId);
 
-        console.log(`User ${userId} - DB Balance: ${dbBalance} USDT, Solscan Balance: ${solscanBalance} USDT`);
+        console.log(`User ${userId} - DB Balance: ${dbBalance} USDT, Solana Balance: ${solanaBalance} USDT`);
 
-        // If the Solscan balance is greater than the database balance, update the DB
-        if (solscanBalance > dbBalance) {
-            await updateUserBalanceInDB(userId, solscanBalance);
-            console.log(`User ${userId}'s balance updated from ${dbBalance} USDT to ${solscanBalance} USDT`);
+        // If the Solana balance is greater than the database balance, update the DB
+        if (solanaBalance > dbBalance) {
+            await updateUserBalanceInDB(userId, solanaBalance);
+            console.log(`User ${userId}'s balance updated from ${dbBalance} USDT to ${solanaBalance} USDT`);
         } else {
             console.log(`No new funds detected for user ${userId}`);
         }
@@ -335,7 +315,9 @@ async function handlePasswordResponse(chatId, text) {
     } else if (action === 'login') {
         const user = await getUserByTelegramId(userId);
         if (user && user.password === text) {
-            await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others);
+            const solanaBalance = await fetchUSDTBalanceFromSolana(user.sol_wallet_address);
+            await updateUserBalanceInDB(userId, solanaBalance);
+            await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
             delete userSessions[chatId];
         } else {
             await sendMessage(chatId, "Incorrect password. Please try again.");
