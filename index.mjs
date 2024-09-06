@@ -87,84 +87,44 @@ async function updateUserBalanceInDB(userId, newBalance) {
     }
 }
 
-// Function to monitor the user's USDT account and update balance if funds are added
-async function monitorUSDTAccountAndUpdateBalance(walletAddress, userId) {
+// Function to poll USDT balance after user clicks "Add Funds"
+async function pollForFunds(walletAddress, userId, chatId) {
     try {
-        // Fetch the current balance from Solana
-        const solanaBalance = await fetchUSDTBalanceFromSolana(walletAddress);
+        console.log(`Polling for USDT funds for user ${userId}`);
 
-        // Get the balance stored in the database
+        // Get current DB balance
         const dbBalance = await getUserBalanceFromDB(userId);
 
-        console.log(`User ${userId} - DB Balance: ${dbBalance} USDT, Solana Balance: ${solanaBalance} USDT`);
+        // Poll every 3 seconds
+        const pollingInterval = setInterval(async () => {
+            const solanaBalance = await fetchUSDTBalanceFromSolana(walletAddress);
 
-        // If the Solana balance is greater than the database balance, update the DB
-        if (solanaBalance > dbBalance) {
-            await updateUserBalanceInDB(userId, solanaBalance);
-            console.log(`User ${userId}'s balance updated from ${dbBalance} USDT to ${solanaBalance} USDT`);
-        } else {
-            console.log(`No new funds detected for user ${userId}`);
-        }
+            if (solanaBalance > dbBalance) {
+                clearInterval(pollingInterval); // Stop polling when funds are detected
+                await updateUserBalanceInDB(userId, solanaBalance);
+
+                const fundsAddedMessage = `Funds Added: ${solanaBalance - dbBalance} USDT. Restarting bot to update balance...`;
+                await sendMessage(chatId, fundsAddedMessage); // Notify user about added funds
+
+                // Restart the bot logic from the login phase to show the new balance
+                await restartBotAfterFundsAdded(chatId, userId);
+            }
+        }, 3000); // Poll every 3 seconds
     } catch (error) {
-        console.error(`Error monitoring USDT account and updating balance: ${error.message}`);
+        console.error(`Error while polling for funds: ${error.message}`);
     }
 }
 
-// Function to transfer USDT to Phantom Wallet
-async function transferUSDTToPhantomWallet(walletAddress, amount) {
-    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
-    const usdtMintPublicKey = new solanaWeb3.PublicKey(usdtMintAddress);
-
-    const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        walletAddress,  // Provide wallet's public key
-        usdtMintPublicKey,
-        walletAddress // Same public key here
-    );
-
-    const toTokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        walletAddress,  // Provide keypair
-        usdtMintPublicKey,
-        new solanaWeb3.PublicKey(phantomWalletAddress) // Phantom wallet public key
-    );
-
-    if (amount > 0) {
-        const signature = await transfer(
-            connection,
-            walletAddress,
-            fromTokenAccount.address,
-            toTokenAccount.address,
-            walletAddress,
-            amount
-        );
-
-        console.log(`USDT transferred to Phantom wallet. Transaction signature: ${signature}`);
-    } else {
-        console.log("Transfer amount is zero or invalid.");
-    }
+// Function to restart the bot after funds are detected
+async function restartBotAfterFundsAdded(chatId, userId) {
+    const user = await getUserByTelegramId(userId);
+    const solanaBalance = await fetchUSDTBalanceFromSolana(user.sol_wallet_address);
+    await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
 }
 
-// Update the last known transaction signature for the user
-async function updateLastTransactionSignature(userId, signature) {
-    const query = `UPDATE users SET last_transaction_signature = $1 WHERE id = $2`;
-    await client.query(query, [signature, userId]);
-}
-
-// Save USDT transaction details to the database
-async function saveTransactionToDatabase(userId, walletAddress, amount, signature) {
-    try {
-        const query = `INSERT INTO usdt_transactions (user_id, wallet_address, amount, signature) VALUES ($1, $2, $3, $4)`;
-        await client.query(query, [userId, walletAddress, amount, signature]);
-        console.log(`Transaction saved in the database with signature: ${signature}`);
-    } catch (error) {
-        console.error('Error saving transaction to the database:', error.message);
-    }
-}
-
-// Function to handle "Add Funds" when a user clicks the button
-async function handleAddFunds(chatId, telegramId) {
-    const user = await getUserByTelegramId(telegramId);
+// Handle "Add Funds" when user clicks the button
+async function handleAddFunds(chatId, userId) {
+    const user = await getUserByTelegramId(userId);
 
     let solWalletAddress = user.sol_wallet_address;
     let solWalletPrivateKey = user.sol_wallet_private_key;
@@ -175,18 +135,17 @@ async function handleAddFunds(chatId, telegramId) {
         solWalletPrivateKey = bs58.encode(keypair.secretKey);
 
         const query = `UPDATE users SET sol_wallet_address = $1, sol_wallet_private_key = $2 WHERE telegram_id = $3`;
-        await client.query(query, [solWalletAddress, solWalletPrivateKey, telegramId]);
+        await client.query(query, [solWalletAddress, solWalletPrivateKey, userId]);
 
-        console.log(`Generated new wallet for user ${telegramId}: ${solWalletAddress}`);
+        console.log(`Generated new wallet for user ${userId}: ${solWalletAddress}`);
     }
-
-    console.log(`Monitoring wallet: ${solWalletAddress} for user ${telegramId}`);
 
     await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
 
-    setInterval(async () => {
-        await monitorUSDTAccountAndUpdateBalance(solWalletAddress, user.id);
-    }, 15000);
+    // Start polling after 3 seconds
+    setTimeout(() => {
+        pollForFunds(solWalletAddress, userId, chatId);
+    }, 3000);
 }
 
 // Telegram Bot Integration
