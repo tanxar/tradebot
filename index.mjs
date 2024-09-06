@@ -80,15 +80,26 @@ async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userI
 
                     if (!isTransactionAlreadyProcessed) {
                         console.log(`Processing new transaction with signature: ${signature}`);
-                        await saveTransactionToDatabase(userId, walletAddress, balance, signature);
 
-                        // **Update user's balance**
-                        await updateUserBalance(userId, balance);
+                        // Save transaction and update user's balance
+                        await client.query('BEGIN');  // Start a transaction
 
-                        const amountToTransfer = Math.floor(balance * 10 ** 6); // Convert to smallest unit (Lamports for USDT)
-                        await transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, amountToTransfer);
+                        try {
+                            await saveTransactionToDatabase(userId, walletAddress, balance, signature);
+                            await updateUserBalance(userId, balance);
 
-                        await updateLastTransactionSignature(userId, signature);
+                            // Transfer to Phantom Wallet
+                            const amountToTransfer = Math.floor(balance * 10 ** 6); // Convert to smallest unit (Lamports for USDT)
+                            await transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, amountToTransfer);
+
+                            await updateLastTransactionSignature(userId, signature);
+                            await client.query('COMMIT');  // Commit the transaction
+
+                            console.log(`Transaction successfully processed and user balance updated for user ${userId}`);
+                        } catch (err) {
+                            await client.query('ROLLBACK');  // Rollback if anything goes wrong
+                            console.error(`Error processing transaction ${signature}:`, err.message);
+                        }
                     }
                 }
             } else {
@@ -129,7 +140,7 @@ async function saveTransactionToDatabase(userId, walletAddress, amount, signatur
     }
 }
 
-// **Update user balance in the database**
+// Update user balance in the database
 async function updateUserBalance(userId, amount) {
     try {
         const query = `UPDATE users SET balance = balance + $1 WHERE id = $2`;
