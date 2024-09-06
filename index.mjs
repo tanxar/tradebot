@@ -33,7 +33,7 @@ fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
 // Object to hold user sessions
 let userSessions = {};
 
-// USDT Mint Address on Solana
+// USDT Mint Address on Solana (Ensure that this is still correct in 2024)
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzdQvAx2eWtS5tybVopF3WQihDnm1HmwW8VaMF');
 
 // Phantom wallet address (where USDT will be transferred)
@@ -53,6 +53,7 @@ async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userI
 
         console.log(`Monitoring wallet ${walletAddress} for USDT transactions`);
 
+        // Get the token accounts for USDT owned by this wallet
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
             new solanaWeb3.PublicKey(walletAddress),
             { mint: usdtMintAddress }
