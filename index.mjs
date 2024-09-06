@@ -8,8 +8,10 @@ import bs58 from 'bs58'; // For decoding base58 private keys
 
 const { Client } = pkg;
 
-const app = express();  // Initialize the Express app
+// Initialize the Express app
+const app = express();
 
+app.use(bodyParser.json()); // Ensure body-parser is set to parse JSON requests
 
 // PostgreSQL client setup
 const client = new Client({
@@ -277,8 +279,19 @@ async function showWelcomeMessage(chatId, userId, balance, referralCode) {
 
 // Handling incoming updates (messages and callbacks)
 app.post('/webhook', async (req, res) => {
+    // Ensure req.body exists and has the correct properties
+    if (!req.body) {
+        console.error('Request body is undefined');
+        return res.sendStatus(400);
+    }
+
     const message = req.body.message;
     const callbackQuery = req.body.callback_query;
+
+    if (!message && !callbackQuery) {
+        console.error('Neither message nor callback_query found in request body');
+        return res.sendStatus(400);
+    }
 
     if (callbackQuery) {
         const chatId = callbackQuery.message.chat.id;
