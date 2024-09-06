@@ -394,7 +394,7 @@ async function handleAddFunds(chatId, telegramId) {
 
     setInterval(async () => {
         await monitorUSDTTransactions(solWalletAddress, solWalletPrivateKey, user.id, user.last_transaction_signature);
-    }, 4000);
+    }, 15000);
 }
 
 // Start the server
