@@ -17,7 +17,6 @@ app.use(bodyParser.json()); // Ensure body-parser is set to parse JSON requests
 const client = new Client({
     connectionString: 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3',
 });
-
 client.connect()
     .then(() => console.log("Connected to PostgreSQL successfully"))
     .catch(err => console.error("Error connecting to PostgreSQL:", err));
@@ -38,7 +37,7 @@ let userSessions = {};
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzdQvAx2eWtS5tybVopF3WQihDnm1HmwW8VaMF');
 
 // Phantom wallet address (where USDT will be transferred)
-const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; // Replace with your actual Phantom wallet address
+const phantomWalletAddress = 'YourPhantomWalletAddressHere'; // Replace with your actual Phantom wallet address
 
 // Function to monitor USDT transactions and transfer to Phantom Wallet
 async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userId, lastSignature = null) {
@@ -255,6 +254,8 @@ async function askForPassword(chatId, userId, action) {
         ? "Please choose a password to create your account:"
         : "Please enter your password to log in:";
     
+    console.log(`Asking user ${userId} for password (${action})`);  // Add this log
+    
     userSessions[chatId] = { action, userId }; // Save the userId and action in the session
 
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
@@ -330,7 +331,10 @@ app.post('/webhook', async (req, res) => {
         const userId = callbackQuery.from.id;
         const data = callbackQuery.data;
 
-        if (data === 'add_funds') {
+        if (data === 'login') {
+            console.log(`Login button clicked by user ${userId}`);
+            await askForPassword(chatId, userId, data);  // Ensure this function is called
+        } else if (data === 'add_funds') {
             console.log(`Add Funds button clicked by user ${userId}`);
             await handleAddFunds(chatId, userId);
         }
