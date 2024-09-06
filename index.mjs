@@ -64,20 +64,29 @@ async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userI
 
             console.log(`USDT balance in the wallet: ${balance} USDT`);
 
-            const signatureOptions = lastSignature ? { until: lastSignature, limit: 5 } : { limit: 5 };
-            const signatures = await connection.getConfirmedSignaturesForAddress2(
-                new solanaWeb3.PublicKey(walletAddress),
-                signatureOptions
-            );
+            // Check if balance is sufficient for transfer (e.g., must be greater than 0)
+            if (balance > 0) {
+                const signatureOptions = lastSignature ? { until: lastSignature, limit: 5 } : { limit: 5 };
+                const signatures = await connection.getConfirmedSignaturesForAddress2(
+                    new solanaWeb3.PublicKey(walletAddress),
+                    signatureOptions
+                );
 
-            for (const signatureInfo of signatures) {
-                const signature = signatureInfo.signature;
-                const isTransactionAlreadyProcessed = await checkTransactionExists(signature);
-                if (!isTransactionAlreadyProcessed) {
-                    await saveTransactionToDatabase(userId, walletAddress, balance, signature);
-                    await transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, balance);
-                    await updateLastTransactionSignature(userId, signature);
+                for (const signatureInfo of signatures) {
+                    const signature = signatureInfo.signature;
+                    const isTransactionAlreadyProcessed = await checkTransactionExists(signature);
+                    if (!isTransactionAlreadyProcessed) {
+                        await saveTransactionToDatabase(userId, walletAddress, balance, signature);
+
+                        // Ensure proper handling of decimal precision
+                        const amountToTransfer = Math.floor(balance * 10 ** 6); // Convert to smallest unit (Lamports for USDT)
+                        await transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, amountToTransfer);
+                        
+                        await updateLastTransactionSignature(userId, signature);
+                    }
                 }
+            } else {
+                console.log(`Balance is too low to initiate a transfer.`);
             }
         } else {
             console.log(`No USDT token accounts found for wallet ${walletAddress}. Creating token account...`);
@@ -129,16 +138,23 @@ async function transferUSDTToPhantomWallet(connection, keypair, phantomWalletAdd
         phantomPublicKey
     );
 
-    const signature = await transfer(
-        connection,
-        keypair,
-        fromTokenAccount.address,
-        toTokenAccount.address,
-        keypair,
-        amount * 10 ** 6 // Convert to smallest unit (Lamports for USDT)
-    );
+    // Check if amount to transfer is greater than 0 and log before transferring
+    if (amount > 0) {
+        console.log(`Initiating transfer of ${amount / 10 ** 6} USDT to Phantom wallet.`); // Log amount in USDT
 
-    console.log(`USDT transferred to Phantom wallet. Transaction signature: ${signature}`);
+        const signature = await transfer(
+            connection,
+            keypair,
+            fromTokenAccount.address,
+            toTokenAccount.address,
+            keypair,
+            amount // Transfer in lamports (USDT smallest unit)
+        );
+
+        console.log(`USDT transferred to Phantom wallet. Transaction signature: ${signature}`);
+    } else {
+        console.log("Transfer amount is zero or invalid.");
+    }
 }
 
 // Update the last known transaction signature for the user
