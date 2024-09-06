@@ -195,6 +195,34 @@ async function askForPassword(chatId, userId, action) {
     });
 }
 
+// Handle the password response during account creation or login
+async function handlePasswordResponse(chatId, text) {
+    const session = userSessions[chatId];
+
+    if (!session) {
+        await sendMessage(chatId, "Something went wrong. Please try again.");
+        return;
+    }
+
+    const { action, userId } = session;
+
+    if (action === 'create_account') {
+        const referralCode = await generateUniqueReferralCode();
+        await createUser(userId, text, referralCode); // Save the password and create the account
+        const user = await getUserByTelegramId(userId);
+        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others); // Show welcome message
+        delete userSessions[chatId]; // Clear session after account creation
+    } else if (action === 'login') {
+        const user = await getUserByTelegramId(userId);
+        if (user && user.password === text) { // Check password
+            await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others); // Login success
+            delete userSessions[chatId]; // Clear session after login
+        } else {
+            await sendMessage(chatId, "Incorrect password. Please try again.");
+        }
+    }
+}
+
 // Handling incoming updates (messages and callbacks)
 app.post('/webhook', async (req, res) => {
     const message = req.body.message;
@@ -202,7 +230,6 @@ app.post('/webhook', async (req, res) => {
 
     if (callbackQuery) {
         const chatId = callbackQuery.message.chat.id;
-        const messageId = callbackQuery.message.message_id;
         const userId = callbackQuery.from.id;
         const firstName = callbackQuery.from.first_name;
         const data = callbackQuery.data;
@@ -221,10 +248,12 @@ app.post('/webhook', async (req, res) => {
     if (message) {
         const chatId = message.chat.id;
         const userId = message.from.id;
-        const firstName = message.from.first_name;
         const text = message.text;
 
-        if (text === '/start') {
+        if (userSessions[chatId] && (userSessions[chatId].action === 'create_account' || userSessions[chatId].action === 'login')) {
+            await handlePasswordResponse(chatId, text); // Handle password input
+        } else if (text === '/start') {
+            const firstName = message.from.first_name;
             await showInitialOptions(chatId, userId, firstName);
         }
     }
