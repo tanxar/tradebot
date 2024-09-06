@@ -42,8 +42,14 @@ const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; // 
 // Function to fetch USDT balance from Solscan for a user's Solana wallet
 async function fetchUSDTBalanceFromSolscan(walletAddress) {
     try {
-        const url = `https://public-api.solscan.io/account/tokens?account=${walletAddress}`;
+        // Correct Solscan API for fetching tokens in a wallet
+        const url = `https://api.solscan.io/account/tokens?address=${walletAddress}`;
         const response = await fetch(url);
+
+        if (response.status === 404) {
+            console.error(`Wallet address ${walletAddress} not found on Solscan.`);
+            return 0;
+        }
 
         if (!response.ok) {
             throw new Error(`Error fetching data from Solscan: ${response.statusText}`);
