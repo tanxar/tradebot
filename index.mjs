@@ -17,7 +17,10 @@ app.use(bodyParser.json()); // Ensure body-parser is set to parse JSON requests
 const client = new Client({
     connectionString: 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3',
 });
-client.connect();
+
+client.connect()
+    .then(() => console.log("Connected to PostgreSQL successfully"))
+    .catch(err => console.error("Error connecting to PostgreSQL:", err));
 
 // Telegram bot API token and webhook URL
 const TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
@@ -45,51 +48,57 @@ async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userI
 
     console.log(`Monitoring wallet ${walletAddress} for USDT transactions`);
 
-    // Fetch token accounts for the wallet
-    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-        new solanaWeb3.PublicKey(walletAddress),
-        { mint: usdtMintAddress }
-    );
-
-    if (tokenAccounts.value.length > 0) {
-        console.log(`Found token accounts for wallet ${walletAddress}`);
-
-        const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
-        const balance = tokenAccount.tokenAmount.uiAmount;
-
-        console.log(`USDT balance in the wallet: ${balance} USDT`);
-
-        // Fetch transaction signatures, starting from the last known signature if provided
-        const signatureOptions = lastSignature ? { until: lastSignature, limit: 5 } : { limit: 5 };
-        const signatures = await connection.getConfirmedSignaturesForAddress2(
+    try {
+        // Fetch token accounts for the wallet
+        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
             new solanaWeb3.PublicKey(walletAddress),
-            signatureOptions
+            { mint: usdtMintAddress }
         );
 
-        console.log(`Found ${signatures.length} transaction signatures for wallet ${walletAddress}`);
+        console.log(`Token accounts: ${JSON.stringify(tokenAccounts)}`);
 
-        for (const signatureInfo of signatures) {
-            const signature = signatureInfo.signature;
+        if (tokenAccounts.value.length > 0) {
+            console.log(`Found token accounts for wallet ${walletAddress}`);
 
-            // Check if the transaction signature is already saved in the database
-            const isTransactionAlreadyProcessed = await checkTransactionExists(signature);
-            if (!isTransactionAlreadyProcessed) {
-                console.log(`New USDT transaction detected: ${balance} USDT, Signature: ${signature}`);
+            const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
+            const balance = tokenAccount.tokenAmount.uiAmount;
 
-                // Step 1: Save transaction to the database
-                await saveTransactionToDatabase(userId, walletAddress, balance, signature);
+            console.log(`USDT balance in the wallet: ${balance} USDT`);
 
-                // Step 2: Transfer USDT to Phantom wallet
-                await transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, balance);
+            // Fetch transaction signatures, starting from the last known signature if provided
+            const signatureOptions = lastSignature ? { until: lastSignature, limit: 5 } : { limit: 5 };
+            const signatures = await connection.getConfirmedSignaturesForAddress2(
+                new solanaWeb3.PublicKey(walletAddress),
+                signatureOptions
+            );
 
-                // Update the last signature in the users table
-                await updateLastTransactionSignature(userId, signature);
-            } else {
-                console.log(`Transaction ${signature} has already been processed`);
+            console.log(`Found ${signatures.length} transaction signatures for wallet ${walletAddress}`);
+
+            for (const signatureInfo of signatures) {
+                const signature = signatureInfo.signature;
+
+                // Check if the transaction signature is already saved in the database
+                const isTransactionAlreadyProcessed = await checkTransactionExists(signature);
+                if (!isTransactionAlreadyProcessed) {
+                    console.log(`New USDT transaction detected: ${balance} USDT, Signature: ${signature}`);
+
+                    // Step 1: Save transaction to the database
+                    await saveTransactionToDatabase(userId, walletAddress, balance, signature);
+
+                    // Step 2: Transfer USDT to Phantom wallet
+                    await transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, balance);
+
+                    // Update the last signature in the users table
+                    await updateLastTransactionSignature(userId, signature);
+                } else {
+                    console.log(`Transaction ${signature} has already been processed`);
+                }
             }
+        } else {
+            console.log(`No USDT token accounts found for wallet ${walletAddress}`);
         }
-    } else {
-        console.log(`No USDT token accounts found for wallet ${walletAddress}`);
+    } catch (error) {
+        console.error(`Error while monitoring wallet ${walletAddress}:`, error);
     }
 }
 
@@ -97,19 +106,23 @@ async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userI
 async function checkTransactionExists(signature) {
     const query = 'SELECT COUNT(*) FROM usdt_transactions WHERE signature = $1';
     const result = await client.query(query, [signature]);
+    console.log(`Transaction ${signature} exists: ${result.rows[0].count > 0}`);
     return result.rows[0].count > 0;
 }
 
 // Save USDT transaction details to the database
 async function saveTransactionToDatabase(userId, walletAddress, amount, signature) {
     const query = `INSERT INTO usdt_transactions (user_id, wallet_address, amount, signature) VALUES ($1, $2, $3, $4)`;
-    await client.query(query, [userId, walletAddress, amount, signature]);
-    console.log(`Saved transaction to the database: ${amount} USDT, Signature: ${signature}`);
+    try {
+        await client.query(query, [userId, walletAddress, amount, signature]);
+        console.log(`Saved transaction to the database: ${amount} USDT, Signature: ${signature}`);
+    } catch (err) {
+        console.error("Error saving transaction to database:", err);
+    }
 }
 
 // Function to transfer USDT to the Phantom Wallet
 async function transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, amount) {
-    // Get or create the associated token account for the Phantom wallet
     const phantomPublicKey = new solanaWeb3.PublicKey(phantomWalletAddress);
     const usdtMintPublicKey = new solanaWeb3.PublicKey(usdtMintAddress);
 
@@ -154,10 +167,17 @@ async function handleAddFunds(chatId, telegramId) {
     const solWalletPrivateKey = user.sol_wallet_private_key;
     const lastSignature = user.last_transaction_signature || null;
 
+    console.log(`Starting to monitor wallet: ${solWalletAddress} for user ${telegramId}`);
+    
+    // Send the wallet address to the user
     await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
 
-    // Monitor for USDT transactions and automatically transfer to Phantom wallet
+    // Monitor for USDT transactions
+    console.log(`Setting up interval to monitor wallet: ${solWalletAddress}`);
+    
+    // Call the monitoring function every minute
     setInterval(async () => {
+        console.log(`Calling monitorUSDTTransactions for wallet: ${solWalletAddress}`);
         await monitorUSDTTransactions(solWalletAddress, solWalletPrivateKey, user.id, lastSignature);
     }, 60000); // Check every minute for incoming transactions
 }
@@ -302,30 +322,16 @@ async function showWelcomeMessage(chatId, userId, balance, referralCode) {
 
 // Handling incoming updates (messages and callbacks)
 app.post('/webhook', async (req, res) => {
-    // Ensure req.body exists and has the correct properties
-    if (!req.body) {
-        console.error('Request body is undefined');
-        return res.sendStatus(400);
-    }
-
     const message = req.body.message;
     const callbackQuery = req.body.callback_query;
-
-    if (!message && !callbackQuery) {
-        console.error('Neither message nor callback_query found in request body');
-        return res.sendStatus(400);
-    }
 
     if (callbackQuery) {
         const chatId = callbackQuery.message.chat.id;
         const userId = callbackQuery.from.id;
         const data = callbackQuery.data;
 
-        if (data === 'create_account') {
-            await askForPassword(chatId, userId, data);
-        } else if (data === 'login') {
-            await askForPassword(chatId, userId, data);
-        } else if (data === 'add_funds') {
+        if (data === 'add_funds') {
+            console.log(`Add Funds button clicked by user ${userId}`);
             await handleAddFunds(chatId, userId);
         }
     }
