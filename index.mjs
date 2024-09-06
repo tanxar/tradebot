@@ -289,6 +289,71 @@ async function showWelcomeMessage(chatId, userId, balance) {
     });
 }
 
+// Function to ask the user for a password (during account creation or login)
+async function askForPassword(chatId, userId, action) {
+    const message = action === 'create_account'
+        ? "Please choose a password to create your account:"
+        : "Please enter your password to log in:";
+
+    userSessions[chatId] = { action, userId };  // Store session for account creation or login
+
+    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+        }),
+    });
+}
+
+// Handle password response from the user (during account creation or login)
+async function handlePasswordResponse(chatId, text) {
+    const session = userSessions[chatId];
+
+    if (!session) {
+        await sendMessage(chatId, "Something went wrong. Please try again.");
+        return;
+    }
+
+    const { action, userId } = session;
+
+    if (action === 'create_account') {
+        const referralCode = await generateUniqueReferralCode(); // Generate a referral code
+        await createUser(userId, text, referralCode); // Save password and create the account
+        const user = await getUserByTelegramId(userId);
+        await showWelcomeMessage(chatId, userId, user.balance); // Show welcome message
+        delete userSessions[chatId]; // Clear session after account creation
+    } else if (action === 'login') {
+        const user = await getUserByTelegramId(userId);
+        if (user && user.password === text) { // Check password
+            await showWelcomeMessage(chatId, userId, user.balance); // Login success
+            delete userSessions[chatId]; // Clear session after login
+        } else {
+            await sendMessage(chatId, "Incorrect password. Please try again.");
+        }
+    }
+}
+
+// Create a new user in the database
+async function createUser(telegramId, password, referralCode) {
+    // Generate Solana wallet when creating user
+    const keypair = solanaWeb3.Keypair.generate();
+    const solWalletAddress = keypair.publicKey.toBase58();
+    const solWalletPrivateKey = bs58.encode(keypair.secretKey);
+
+    const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
+    await client.query(query, [telegramId, password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
+
+    console.log(`User created with Solana wallet: ${solWalletAddress}`);
+}
+
+// Generate a unique referral code for the user
+async function generateUniqueReferralCode() {
+    const randomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    return randomCode;
+}
+
 // Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
