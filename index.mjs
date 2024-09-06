@@ -2,13 +2,11 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 import pkg from 'pg';
-import * as solanaWeb3 from '@solana/web3.js'; // Solana SDK for wallet generation
+import * as solanaWeb3 from '@solana/web3.js';
+import { getOrCreateAssociatedTokenAccount, transfer } from '@solana/spl-token';
+import bs58 from 'bs58'; // For decoding base58 private keys
 
 const { Client } = pkg;
-
-// Create Express app
-const app = express();
-app.use(bodyParser.json());
 
 // PostgreSQL client setup
 const client = new Client({
@@ -28,98 +26,112 @@ fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
 
 let userSessions = {};
 
-// Solana USDT Mint Address
-const usdtMintAddress = 'Es9vMFrzdQvAx2eWtS5tybVopF3WQihDnm1HmwW8VaMF';
+// USDT Mint Address on Solana
+const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzdQvAx2eWtS5tybVopF3WQihDnm1HmwW8VaMF');
 
-// Function to generate a Solana wallet
-async function generateSolanaWallet() {
-    const keypair = solanaWeb3.Keypair.generate(); // Generates a new keypair
-    const publicKey = keypair.publicKey.toString();
-    const privateKey = Buffer.from(keypair.secretKey).toString('base64'); // Save the private key securely
-    return { publicKey, privateKey };
-}
+// Phantom wallet address (where USDT will be transferred)
+const phantomWalletAddress = '5MDqeVjfjCLoTARPM6w1VTm9nLzdEji6dizQpyoZAzGp'; // Replace with your actual Phantom wallet address
 
-// Save the generated wallet in the database
-async function saveUserWallet(telegramId, publicKey, privateKey) {
-    const query = 'UPDATE users SET sol_wallet_address = $1, sol_wallet_private_key = $2 WHERE telegram_id = $3';
-    await client.query(query, [publicKey, privateKey, telegramId]);
-}
+// Function to monitor USDT transactions and transfer to Phantom Wallet
+async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userId) {
+    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+    const privateKeyBytes = bs58.decode(solWalletPrivateKey); // Decode base58 private key
+    const keypair = solanaWeb3.Keypair.fromSecretKey(privateKeyBytes);
 
-// Monitor USDT transactions to the generated wallet address
-async function monitorUSDTTransactions(walletAddress, telegramId) {
-    const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
-
-    const latestSignature = await connection.getConfirmedSignaturesForAddress2(
+    // Fetch token accounts for the wallet
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
         new solanaWeb3.PublicKey(walletAddress),
-        { limit: 1 }
+        { mint: usdtMintAddress }
     );
 
-    if (latestSignature.length > 0) {
-        const transaction = await connection.getParsedConfirmedTransaction(latestSignature[0].signature);
-        const tokenTransfers = transaction.meta?.postTokenBalances || [];
+    if (tokenAccounts.value.length > 0) {
+        const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
+        const balance = tokenAccount.tokenAmount.uiAmount;
 
-        tokenTransfers.forEach(transfer => {
-            if (transfer.mint === usdtMintAddress) {
-                const amount = transfer.uiTokenAmount.uiAmount;
-                console.log(`USDT received: ${amount}`);
-                updateUserBalance(telegramId, amount);
+        // Fetch recent transaction signatures for this wallet
+        const signatures = await connection.getConfirmedSignaturesForAddress2(
+            new solanaWeb3.PublicKey(walletAddress),
+            { limit: 5 }
+        );
+
+        for (const signatureInfo of signatures) {
+            const signature = signatureInfo.signature;
+
+            // Check if the transaction signature is already saved in the database
+            const isTransactionAlreadyProcessed = await checkTransactionExists(signature);
+            if (!isTransactionAlreadyProcessed) {
+                console.log(`New USDT transaction detected: ${balance} USDT, Signature: ${signature}`);
+
+                // Step 1: Save transaction to the database
+                await saveTransactionToDatabase(userId, walletAddress, balance, signature);
+
+                // Step 2: Transfer USDT to Phantom wallet
+                await transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, balance);
             }
-        });
+        }
     }
 }
 
-// Update user balance in the database
-async function updateUserBalance(telegramId, amount) {
-    const query = 'UPDATE users SET balance = balance + $1 WHERE telegram_id = $2';
-    await client.query(query, [amount, telegramId]);
+// Check if the transaction signature is already saved in the database
+async function checkTransactionExists(signature) {
+    const query = 'SELECT COUNT(*) FROM usdt_transactions WHERE signature = $1';
+    const result = await client.query(query, [signature]);
+    return result.rows[0].count > 0;
 }
 
-
-
-async function showWelcomeMessage(chatId, userId, balance, referralCode) {
-    const message = `Welcome back!\n\nYour balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\n\nClick and hold on the referral code to copy.`;
-
-    const options = {
-        chat_id: chatId,
-        text: message,
-        parse_mode: 'HTML', // Enable HTML formatting for referral code
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "Add Funds", callback_data: "add_funds" }],
-                [{ text: "Logout", callback_data: "logout" }],
-            ],
-        },
-    };
-
-    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
-    });
+// Save USDT transaction details to the database
+async function saveTransactionToDatabase(userId, walletAddress, amount, signature) {
+    const query = `INSERT INTO usdt_transactions (user_id, wallet_address, amount, signature) VALUES ($1, $2, $3, $4)`;
+    await client.query(query, [userId, walletAddress, amount, signature]);
+    console.log(`Saved transaction to the database: ${amount} USDT, Signature: ${signature}`);
 }
 
+// Function to transfer USDT to the Phantom Wallet
+async function transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, amount) {
+    // Get or create the associated token account for the Phantom wallet
+    const phantomPublicKey = new solanaWeb3.PublicKey(phantomWalletAddress);
+    const usdtMintPublicKey = new solanaWeb3.PublicKey(usdtMintAddress);
 
+    const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
+        connection,
+        keypair,
+        usdtMintPublicKey,
+        keypair.publicKey
+    );
 
+    const toTokenAccount = await getOrCreateAssociatedTokenAccount(
+        connection,
+        keypair,
+        usdtMintPublicKey,
+        phantomPublicKey
+    );
 
-// Handle "Add Funds" when a user clicks the button
+    // Transfer the USDT to the Phantom wallet
+    const signature = await transfer(
+        connection,
+        keypair,
+        fromTokenAccount.address,
+        toTokenAccount.address,
+        keypair,
+        amount * 10 ** 6 // Convert to smallest unit (Lamports for USDT)
+    );
+
+    console.log(`USDT transferred to Phantom wallet. Transaction signature: ${signature}`);
+}
+
+// Function to handle "Add Funds" when a user clicks the button
 async function handleAddFunds(chatId, telegramId) {
-    const wallet = await generateSolanaWallet(); // Generate a unique wallet
-    await saveUserWallet(telegramId, wallet.publicKey, wallet.privateKey);
-
-    await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${wallet.publicKey}</code>`, 'HTML');
-
-    // You can monitor the wallet for incoming USDT transactions periodically
-    setInterval(async () => {
-        await monitorUSDTTransactions(wallet.publicKey, telegramId);
-    }, 60000); // Check every minute for incoming transactions
-}
-
-// Show the user's updated balance after receiving USDT
-async function showUpdatedBalance(chatId, telegramId) {
     const user = await getUserByTelegramId(telegramId);
-    const balance = user.balance;
-    await sendMessage(chatId, `Your updated balance: ${balance} USDT`);
+
+    const solWalletAddress = user.sol_wallet_address;
+    const solWalletPrivateKey = user.sol_wallet_private_key;
+
+    await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
+
+    // Monitor for USDT transactions and automatically transfer to Phantom wallet
+    setInterval(async () => {
+        await monitorUSDTTransactions(solWalletAddress, solWalletPrivateKey, user.id);
+    }, 60000); // Check every minute for incoming transactions
 }
 
 // Function to send a message via Telegram
@@ -130,6 +142,13 @@ async function sendMessage(chatId, text, parseMode = 'Markdown') {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
     });
+}
+
+// Get user data by Telegram ID
+async function getUserByTelegramId(telegramId) {
+    const query = 'SELECT * FROM users WHERE telegram_id = $1';
+    const result = await client.query(query, [telegramId]);
+    return result.rows[0];
 }
 
 // Show initial options to the user (Create Account, Login)
@@ -169,19 +188,6 @@ async function showInitialOptions(chatId, userId, firstName) {
     });
 }
 
-// Get user data by Telegram ID
-async function getUserByTelegramId(telegramId) {
-    const query = 'SELECT * FROM users WHERE telegram_id = $1';
-    const result = await client.query(query, [telegramId]);
-    return result.rows[0];
-}
-
-// Create a new user with a generated Solana address
-async function createUser(telegramId, password, referralCode) {
-    const query = 'INSERT INTO users (telegram_id, password, balance, ref_code_invite_others) VALUES ($1, $2, $3, $4)';
-    await client.query(query, [telegramId, password, 0, referralCode]);
-}
-
 // Check if user exists in the database
 async function checkUserExists(telegramId) {
     const query = 'SELECT COUNT(*) FROM users WHERE telegram_id = $1';
@@ -189,19 +195,10 @@ async function checkUserExists(telegramId) {
     return result.rows[0].count > 0;
 }
 
-// Generate a unique referral code
-async function generateUniqueReferralCode() {
-    let isUnique = false;
-    let referralCode;
-    while (!isUnique) {
-        referralCode = Math.floor(100000 + Math.random() * 900000).toString(); // Generate a 6-digit code
-        const query = 'SELECT COUNT(*) FROM users WHERE ref_code_invite_others = $1';
-        const result = await client.query(query, [referralCode]);
-        if (result.rows[0].count == 0) {
-            isUnique = true;
-        }
-    }
-    return referralCode;
+// Create a new user with a generated Solana address
+async function createUser(telegramId, password, referralCode) {
+    const query = 'INSERT INTO users (telegram_id, password, balance, ref_code_invite_others) VALUES ($1, $2, $3, $4)';
+    await client.query(query, [telegramId, password, 0, referralCode]);
 }
 
 // Function to ask the user for a password during account creation or login
@@ -251,6 +248,30 @@ async function handlePasswordResponse(chatId, text) {
     }
 }
 
+// Show welcome message after successful login or account creation
+async function showWelcomeMessage(chatId, userId, balance, referralCode) {
+    const message = `Welcome back!\n\nYour balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\nClick and hold on the referral code to copy.`;
+    
+    const options = {
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'HTML', // Enable HTML formatting for referral code
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "Add Funds", callback_data: "add_funds" }],
+                [{ text: "Logout", callback_data: "logout" }],
+            ],
+        },
+    };
+
+    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+    });
+}
+
 // Handling incoming updates (messages and callbacks)
 app.post('/webhook', async (req, res) => {
     const message = req.body.message;
@@ -259,10 +280,7 @@ app.post('/webhook', async (req, res) => {
     if (callbackQuery) {
         const chatId = callbackQuery.message.chat.id;
         const userId = callbackQuery.from.id;
-        const firstName = callbackQuery.from.first_name;
         const data = callbackQuery.data;
-
-        userSessions[chatId] = { userId, firstName };
 
         if (data === 'create_account') {
             await askForPassword(chatId, userId, data);
