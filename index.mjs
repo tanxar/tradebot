@@ -72,10 +72,15 @@ async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userI
                     signatureOptions
                 );
 
+                // Debugging: Log the retrieved signatures to check if we are getting any
+                console.log("Retrieved Signatures:", signatures);
+
                 for (const signatureInfo of signatures) {
                     const signature = signatureInfo.signature;
                     const isTransactionAlreadyProcessed = await checkTransactionExists(signature);
+
                     if (!isTransactionAlreadyProcessed) {
+                        console.log(`Processing new transaction with signature: ${signature}`);
                         await saveTransactionToDatabase(userId, walletAddress, balance, signature);
 
                         // Ensure proper handling of decimal precision
@@ -115,8 +120,13 @@ async function checkTransactionExists(signature) {
 
 // Save USDT transaction details to the database
 async function saveTransactionToDatabase(userId, walletAddress, amount, signature) {
-    const query = `INSERT INTO usdt_transactions (user_id, wallet_address, amount, signature) VALUES ($1, $2, $3, $4)`;
-    await client.query(query, [userId, walletAddress, amount, signature]);
+    try {
+        const query = `INSERT INTO usdt_transactions (user_id, wallet_address, amount, signature) VALUES ($1, $2, $3, $4)`;
+        await client.query(query, [userId, walletAddress, amount, signature]);
+        console.log(`Transaction saved in the database with signature: ${signature}`);
+    } catch (error) {
+        console.error('Error saving transaction to the database:', error.message);
+    }
 }
 
 // Function to transfer USDT to the Phantom Wallet
