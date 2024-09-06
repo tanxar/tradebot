@@ -74,6 +74,34 @@ async function updateUserBalance(telegramId, amount) {
     await client.query(query, [amount, telegramId]);
 }
 
+
+
+async function showWelcomeMessage(chatId, userId, balance, referralCode) {
+    const message = `Welcome back!\n\nYour balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\n\nClick and hold on the referral code to copy.`;
+
+    const options = {
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'HTML', // Enable HTML formatting for referral code
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "Add Funds", callback_data: "add_funds" }],
+                [{ text: "Logout", callback_data: "logout" }],
+            ],
+        },
+    };
+
+    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+    });
+}
+
+
+
+
 // Handle "Add Funds" when a user clicks the button
 async function handleAddFunds(chatId, telegramId) {
     const wallet = await generateSolanaWallet(); // Generate a unique wallet
