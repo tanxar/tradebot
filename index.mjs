@@ -152,6 +152,9 @@ app.post('/webhook', async (req, res) => {
         if (data === 'create_account') {
             console.log(`Create account clicked by user ${userId}`);
             await askForPassword(chatId, userId, 'create_account');  // Ask for password for account creation
+        } else if (data === 'login') {
+            console.log(`Login button clicked by user ${userId}`);  // Log when login button is clicked
+            await askForPassword(chatId, userId, 'login');  // Prompt user for password on login
         } else if (data === 'add_funds') {
             console.log(`Add Funds button clicked by user ${userId}`);
             await handleAddFunds(chatId, userId);
@@ -174,7 +177,7 @@ app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
 });
 
-// Show initial options to the user (Create Account button)
+// Show initial options to the user (Create Account and Login buttons)
 async function showInitialOptions(chatId, userId, firstName) {
     const userExists = await checkUserExists(userId);
     let options;
