@@ -21,8 +21,8 @@ client.connect()
     .catch(err => console.error("Error connecting to PostgreSQL:", err));
 
 // Telegram bot API token and webhook URL
-const TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
-const WEBHOOK_URL = 'https://dedouleveitipota.onrender.com/webhook';
+const TOKEN = 'YOUR_TELEGRAM_TOKEN'; // Replace with your actual token
+const WEBHOOK_URL = 'https://yourwebhookurl.com/webhook'; // Replace with your actual webhook URL
 
 // Set up the webhook for Telegram bot
 fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
@@ -35,9 +35,6 @@ let userSessions = {};
 
 // USDT Mint Address on Solana
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
-
-// Phantom wallet address (where USDT will be transferred)
-const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm';
 
 // Function to manually check for USDT balance in the wallet
 async function checkUSDTBalance(walletAddress, solWalletPrivateKey) {
