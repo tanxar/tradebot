@@ -389,7 +389,7 @@ async function handleAddFunds(chatId, telegramId) {
     // Call the monitoring function every minute
     setInterval(async () => {
         await monitorUSDTTransactions(solWalletAddress, solWalletPrivateKey, user.id, user.last_transaction_signature);
-    }, 60000); // Check every minute for incoming transactions
+    }, 4000); // check for for incoming transactions
 }
 
 // Start the server
