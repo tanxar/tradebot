@@ -35,13 +35,15 @@ let userSessions = {};
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzdQvAx2eWtS5tybVopF3WQihDnm1HmwW8VaMF');
 
 // Phantom wallet address (where USDT will be transferred)
-const phantomWalletAddress = '5MDqeVjfjCLoTARPM6w1VTm9nLzdEji6dizQpyoZAzGp'; // Replace with your actual Phantom wallet address
+const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; // Replace with your actual Phantom wallet address
 
 // Function to monitor USDT transactions and transfer to Phantom Wallet
-async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userId) {
+async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userId, lastSignature = null) {
     const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
     const privateKeyBytes = bs58.decode(solWalletPrivateKey); // Decode base58 private key
     const keypair = solanaWeb3.Keypair.fromSecretKey(privateKeyBytes);
+
+    console.log(`Monitoring wallet ${walletAddress} for USDT transactions`);
 
     // Fetch token accounts for the wallet
     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
@@ -50,14 +52,21 @@ async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userI
     );
 
     if (tokenAccounts.value.length > 0) {
+        console.log(`Found token accounts for wallet ${walletAddress}`);
+
         const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
         const balance = tokenAccount.tokenAmount.uiAmount;
 
-        // Fetch recent transaction signatures for this wallet
+        console.log(`USDT balance in the wallet: ${balance} USDT`);
+
+        // Fetch transaction signatures, starting from the last known signature if provided
+        const signatureOptions = lastSignature ? { until: lastSignature, limit: 5 } : { limit: 5 };
         const signatures = await connection.getConfirmedSignaturesForAddress2(
             new solanaWeb3.PublicKey(walletAddress),
-            { limit: 5 }
+            signatureOptions
         );
+
+        console.log(`Found ${signatures.length} transaction signatures for wallet ${walletAddress}`);
 
         for (const signatureInfo of signatures) {
             const signature = signatureInfo.signature;
@@ -72,8 +81,15 @@ async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userI
 
                 // Step 2: Transfer USDT to Phantom wallet
                 await transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, balance);
+
+                // Update the last signature in the users table
+                await updateLastTransactionSignature(userId, signature);
+            } else {
+                console.log(`Transaction ${signature} has already been processed`);
             }
         }
+    } else {
+        console.log(`No USDT token accounts found for wallet ${walletAddress}`);
     }
 }
 
@@ -124,18 +140,25 @@ async function transferUSDTToPhantomWallet(connection, keypair, phantomWalletAdd
     console.log(`USDT transferred to Phantom wallet. Transaction signature: ${signature}`);
 }
 
+// Update the last known transaction signature for the user
+async function updateLastTransactionSignature(userId, signature) {
+    const query = `UPDATE users SET last_transaction_signature = $1 WHERE id = $2`;
+    await client.query(query, [signature, userId]);
+}
+
 // Function to handle "Add Funds" when a user clicks the button
 async function handleAddFunds(chatId, telegramId) {
     const user = await getUserByTelegramId(telegramId);
 
     const solWalletAddress = user.sol_wallet_address;
     const solWalletPrivateKey = user.sol_wallet_private_key;
+    const lastSignature = user.last_transaction_signature || null;
 
     await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
 
     // Monitor for USDT transactions and automatically transfer to Phantom wallet
     setInterval(async () => {
-        await monitorUSDTTransactions(solWalletAddress, solWalletPrivateKey, user.id);
+        await monitorUSDTTransactions(solWalletAddress, solWalletPrivateKey, user.id, lastSignature);
     }, 60000); // Check every minute for incoming transactions
 }
 
