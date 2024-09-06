@@ -3,14 +3,14 @@ import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 import pkg from 'pg';
 import * as solanaWeb3 from '@solana/web3.js';
-import { getOrCreateAssociatedTokenAccount } from '@solana/spl-token';
+import { getOrCreateAssociatedTokenAccount, transfer } from '@solana/spl-token';
 import bs58 from 'bs58'; // For decoding base58 private keys
 
 const { Client } = pkg;
 
 // Initialize the Express app
 const app = express();
-app.use(bodyParser.json());
+app.use(bodyParser.json()); // Ensure body-parser is set to parse JSON requests
 
 // PostgreSQL client setup
 const client = new Client({
@@ -21,8 +21,8 @@ client.connect()
     .catch(err => console.error("Error connecting to PostgreSQL:", err));
 
 // Telegram bot API token and webhook URL
-const TOKEN = 'YOUR_TELEGRAM_TOKEN'; // Replace with your actual token
-const WEBHOOK_URL = 'https://yourwebhookurl.com/webhook'; // Replace with your actual webhook URL
+const TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
+const WEBHOOK_URL = 'https://dedouleveitipota.onrender.com/webhook';
 
 // Set up the webhook for Telegram bot
 fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
@@ -36,8 +36,11 @@ let userSessions = {};
 // USDT Mint Address on Solana
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
-// Function to manually check for USDT balance in the wallet
-async function checkUSDTBalance(walletAddress, solWalletPrivateKey) {
+// Phantom wallet address (where USDT will be transferred)
+const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; // Replace with your actual Phantom wallet address
+
+// Function to monitor USDT transactions and transfer to Phantom Wallet
+async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userId, lastSignature = null) {
     const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
 
     try {
@@ -45,8 +48,10 @@ async function checkUSDTBalance(walletAddress, solWalletPrivateKey) {
             throw new Error("Private key is empty or undefined.");
         }
 
-        const privateKeyBytes = bs58.decode(solWalletPrivateKey);
+        const privateKeyBytes = bs58.decode(solWalletPrivateKey); // Decode base58 private key
         const keypair = solanaWeb3.Keypair.fromSecretKey(privateKeyBytes);
+
+        console.log(`Monitoring wallet ${walletAddress} for USDT transactions`);
 
         // Get the token accounts for USDT owned by this wallet
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
@@ -57,14 +62,125 @@ async function checkUSDTBalance(walletAddress, solWalletPrivateKey) {
         if (tokenAccounts.value.length > 0) {
             const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
             const balance = tokenAccount.tokenAmount.uiAmount;
-            return balance;
+
+            console.log(`USDT balance in the wallet: ${balance} USDT`);
+
+            if (balance > 0) {
+                const signatureOptions = lastSignature ? { until: lastSignature, limit: 5 } : { limit: 5 };
+                const signatures = await connection.getConfirmedSignaturesForAddress2(
+                    new solanaWeb3.PublicKey(walletAddress),
+                    signatureOptions
+                );
+
+                console.log("Retrieved Signatures:", signatures);
+
+                for (const signatureInfo of signatures) {
+                    const signature = signatureInfo.signature;
+                    const isTransactionAlreadyProcessed = await checkTransactionExists(signature);
+
+                    if (!isTransactionAlreadyProcessed) {
+                        console.log(`Processing new transaction with signature: ${signature}`);
+                        await saveTransactionToDatabase(userId, walletAddress, balance, signature);
+
+                        // **Update user's balance**
+                        await updateUserBalance(userId, balance);
+
+                        const amountToTransfer = Math.floor(balance * 10 ** 6); // Convert to smallest unit (Lamports for USDT)
+                        await transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, amountToTransfer);
+
+                        await updateLastTransactionSignature(userId, signature);
+                    }
+                }
+            } else {
+                console.log(`Balance is too low to initiate a transfer.`);
+            }
         } else {
-            return 0;
+            console.log(`No USDT token accounts found for wallet ${walletAddress}. Creating token account...`);
+
+            await getOrCreateAssociatedTokenAccount(
+                connection,
+                keypair,
+                usdtMintAddress,
+                new solanaWeb3.PublicKey(walletAddress)
+            );
+
+            console.log(`Token account created for wallet ${walletAddress}`);
         }
     } catch (error) {
-        console.error(`Error while checking USDT balance for wallet ${walletAddress}:`, error.message);
-        return null;
+        console.error(`Error while monitoring wallet ${walletAddress}:`, error.message);
     }
+}
+
+// Check if the transaction signature is already saved in the database
+async function checkTransactionExists(signature) {
+    const query = 'SELECT COUNT(*) FROM usdt_transactions WHERE signature = $1';
+    const result = await client.query(query, [signature]);
+    return result.rows[0].count > 0;
+}
+
+// Save USDT transaction details to the database
+async function saveTransactionToDatabase(userId, walletAddress, amount, signature) {
+    try {
+        const query = `INSERT INTO usdt_transactions (user_id, wallet_address, amount, signature) VALUES ($1, $2, $3, $4)`;
+        await client.query(query, [userId, walletAddress, amount, signature]);
+        console.log(`Transaction saved in the database with signature: ${signature}`);
+    } catch (error) {
+        console.error('Error saving transaction to the database:', error.message);
+    }
+}
+
+// **Update user balance in the database**
+async function updateUserBalance(userId, amount) {
+    try {
+        const query = `UPDATE users SET balance = balance + $1 WHERE id = $2`;
+        await client.query(query, [amount, userId]);
+        console.log(`User's balance updated by ${amount} USDT.`);
+    } catch (error) {
+        console.error('Error updating user balance:', error.message);
+    }
+}
+
+// Function to transfer USDT to the Phantom Wallet
+async function transferUSDTToPhantomWallet(connection, keypair, phantomWalletAddress, amount) {
+    const phantomPublicKey = new solanaWeb3.PublicKey(phantomWalletAddress);
+    const usdtMintPublicKey = new solanaWeb3.PublicKey(usdtMintAddress);
+
+    const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
+        connection,
+        keypair,
+        usdtMintPublicKey,
+        keypair.publicKey
+    );
+
+    const toTokenAccount = await getOrCreateAssociatedTokenAccount(
+        connection,
+        keypair,
+        usdtMintPublicKey,
+        phantomPublicKey
+    );
+
+    if (amount > 0) {
+        console.log(`Initiating transfer of ${amount / 10 ** 6} USDT to Phantom wallet.`);
+
+        const signature = await transfer(
+            connection,
+            keypair,
+            fromTokenAccount.address,
+            toTokenAccount.address,
+            keypair,
+            amount
+        );
+
+        console.log(`USDT transferred to Phantom wallet. Transaction signature: ${signature}`);
+    } else {
+        console.log("Transfer amount is zero or invalid.");
+    }
+}
+
+// Update the last known transaction signature for the user
+async function updateLastTransactionSignature(userId, signature) {
+    const query = `UPDATE users SET last_transaction_signature = $1 WHERE id = $2`;
+    await client.query(query, [signature, userId]);
 }
 
 // Handle incoming updates (messages and callbacks)
@@ -88,9 +204,6 @@ app.post('/webhook', async (req, res) => {
         } else if (data === 'add_funds') {
             console.log(`Add Funds button clicked by user ${userId}`);
             await handleAddFunds(chatId, userId);
-        } else if (data === 'check_payment') {
-            console.log(`Check Payment button clicked by user ${userId}`);
-            await handleCheckPayment(chatId, userId);
         }
     }
 
@@ -153,146 +266,13 @@ async function checkUserExists(telegramId) {
     return result.rows[0].count > 0;
 }
 
-// Function to handle "Add Funds" when a user clicks the button
-async function handleAddFunds(chatId, telegramId) {
-    const user = await getUserByTelegramId(telegramId);
-
-    let solWalletAddress = user.sol_wallet_address;
-    let solWalletPrivateKey = user.sol_wallet_private_key;
-
-    // If no wallet is present, generate one
-    if (!solWalletAddress || !solWalletPrivateKey) {
-        const keypair = solanaWeb3.Keypair.generate();
-        solWalletAddress = keypair.publicKey.toBase58();
-        solWalletPrivateKey = bs58.encode(keypair.secretKey);
-
-        // Update the wallet in the database
-        const query = `UPDATE users SET sol_wallet_address = $1, sol_wallet_private_key = $2 WHERE telegram_id = $3`;
-        await client.query(query, [solWalletAddress, solWalletPrivateKey, telegramId]);
-
-        console.log(`Generated new wallet for user ${telegramId}: ${solWalletAddress}`);
-    }
-
-    console.log(`Monitoring wallet: ${solWalletAddress} for user ${telegramId}`);
-
-    // Send the wallet address and show the "Check for payment" button
-    const message = `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`;
-    const options = {
-        chat_id: chatId,
-        text: message,
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "Check for payment", callback_data: "check_payment" }],
-            ],
-        },
-    };
-
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
-    });
-
-    // Store session data for the current chat
-    userSessions[chatId] = { solWalletAddress, solWalletPrivateKey };
-}
-
-// Handle "Check for payment" when the button is clicked
-async function handleCheckPayment(chatId, telegramId) {
-    const session = userSessions[chatId];
-    if (!session) {
-        await sendMessage(chatId, "No active session found. Please try again.");
-        return;
-    }
-
-    const { solWalletAddress, solWalletPrivateKey } = session;
-
-    const balance = await checkUSDTBalance(solWalletAddress, solWalletPrivateKey);
-
-    if (balance !== null && balance > 0) {
-        await sendMessage(chatId, `Payment found: ${balance} USDT`, 'HTML');
-
-        // Save transaction and update the total balance
-        await saveTransactionToDatabase(telegramId, balance);
-        const totalBalance = await calculateTotalBalance(telegramId);
-
-        // Restart the session and show the new balance
-        await showWelcomeMessage(chatId, telegramId, totalBalance);
-
-        // Clear the session data to restart the bot
-        delete userSessions[chatId];
-    } else {
-        await sendMessage(chatId, "Payment not found. Please try again later.");
-    }
-}
-
-// Function to save a USDT transaction to the database
-async function saveTransactionToDatabase(telegramId, amount) {
-    try {
-        const query = `INSERT INTO usdt_transactions (telegram_id, amount) VALUES ($1, $2)`;
-        await client.query(query, [telegramId, amount]);
-        console.log(`Transaction saved: ${amount} USDT`);
-    } catch (error) {
-        console.error('Error saving transaction:', error.message);
-    }
-}
-
-// Function to calculate the total balance from all transactions
-async function calculateTotalBalance(telegramId) {
-    const query = 'SELECT SUM(amount) AS total FROM usdt_transactions WHERE telegram_id = $1';
-    const result = await client.query(query, [telegramId]);
-    const totalBalance = result.rows[0].total || 0;
-    console.log(`Total balance for user ${telegramId}: ${totalBalance} USDT`);
-    return totalBalance;
-}
-
-// Send a message via Telegram
-async function sendMessage(chatId, text, parseMode = 'Markdown') {
-    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
-    });
-}
-
-// Get user data by Telegram ID
-async function getUserByTelegramId(telegramId) {
-    const query = 'SELECT * FROM users WHERE telegram_id = $1';
-    const result = await client.query(query, [telegramId]);
-    return result.rows[0];
-}
-
-// Show welcome message after successful login or account creation
-async function showWelcomeMessage(chatId, userId, balance) {
-    const message = `Welcome back!\n\nYour total balance: ${balance} USDT`;
-
-    const options = {
-        chat_id: chatId,
-        text: message,
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "Add Funds", callback_data: "add_funds" }],
-                [{ text: "Logout", callback_data: "logout" }],
-            ],
-        },
-    };
-
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
-    });
-}
-
 // Function to ask the user for a password (during account creation or login)
 async function askForPassword(chatId, userId, action) {
     const message = action === 'create_account'
         ? "Please choose a password to create your account:"
         : "Please enter your password to log in:";
 
-    userSessions[chatId] = { action, userId };  // Store session for account creation or login
+    userSessions[chatId] = { action, userId };
 
     await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
         method: 'POST',
@@ -316,16 +296,16 @@ async function handlePasswordResponse(chatId, text) {
     const { action, userId } = session;
 
     if (action === 'create_account') {
-        const referralCode = await generateUniqueReferralCode(); // Generate a referral code
-        await createUser(userId, text, referralCode); // Save password and create the account
+        const referralCode = await generateUniqueReferralCode();
+        await createUser(userId, text, referralCode);
         const user = await getUserByTelegramId(userId);
-        await showWelcomeMessage(chatId, userId, user.balance); // Show welcome message
-        delete userSessions[chatId]; // Clear session after account creation
+        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others);
+        delete userSessions[chatId];
     } else if (action === 'login') {
         const user = await getUserByTelegramId(userId);
-        if (user && user.password === text) { // Check password
-            await showWelcomeMessage(chatId, userId, user.balance); // Login success
-            delete userSessions[chatId]; // Clear session after login
+        if (user && user.password === text) {
+            await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others);
+            delete userSessions[chatId];
         } else {
             await sendMessage(chatId, "Incorrect password. Please try again.");
         }
@@ -334,7 +314,6 @@ async function handlePasswordResponse(chatId, text) {
 
 // Create a new user in the database
 async function createUser(telegramId, password, referralCode) {
-    // Generate Solana wallet when creating user
     const keypair = solanaWeb3.Keypair.generate();
     const solWalletAddress = keypair.publicKey.toBase58();
     const solWalletPrivateKey = bs58.encode(keypair.secretKey);
@@ -349,6 +328,73 @@ async function createUser(telegramId, password, referralCode) {
 async function generateUniqueReferralCode() {
     const randomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     return randomCode;
+}
+
+// Show welcome message after successful login or account creation
+async function showWelcomeMessage(chatId, userId, balance, referralCode) {
+    const message = `Welcome back!\n\nYour balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\nClick and hold on the referral code to copy.`;
+
+    const options = {
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "Add Funds", callback_data: "add_funds" }],
+                [{ text: "Logout", callback_data: "logout" }],
+            ],
+        },
+    };
+
+    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+    });
+}
+
+// Get user data by Telegram ID
+async function getUserByTelegramId(telegramId) {
+    const query = 'SELECT * FROM users WHERE telegram_id = $1';
+    const result = await client.query(query, [telegramId]);
+    return result.rows[0];
+}
+
+// Function to send a message via Telegram
+async function sendMessage(chatId, text, parseMode = 'Markdown') {
+    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
+    });
+}
+
+// Function to handle "Add Funds" when a user clicks the button
+async function handleAddFunds(chatId, telegramId) {
+    const user = await getUserByTelegramId(telegramId);
+
+    let solWalletAddress = user.sol_wallet_address;
+    let solWalletPrivateKey = user.sol_wallet_private_key;
+
+    if (!solWalletAddress || !solWalletPrivateKey) {
+        const keypair = solanaWeb3.Keypair.generate();
+        solWalletAddress = keypair.publicKey.toBase58();
+        solWalletPrivateKey = bs58.encode(keypair.secretKey);
+
+        const query = `UPDATE users SET sol_wallet_address = $1, sol_wallet_private_key = $2 WHERE telegram_id = $3`;
+        await client.query(query, [solWalletAddress, solWalletPrivateKey, telegramId]);
+
+        console.log(`Generated new wallet for user ${telegramId}: ${solWalletAddress}`);
+    }
+
+    console.log(`Monitoring wallet: ${solWalletAddress} for user ${telegramId}`);
+
+    await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
+
+    setInterval(async () => {
+        await monitorUSDTTransactions(solWalletAddress, solWalletPrivateKey, user.id, user.last_transaction_signature);
+    }, 4000);
 }
 
 // Start the server
