@@ -12,7 +12,7 @@ const { Client } = pkg;
 const app = express();
 app.use(bodyParser.json()); // Ensure body-parser is set to parse JSON requests
 
-// PostgreSQL client setup
+// PostgreSQL client setup with the credentials you provided
 const client = new Client({
     connectionString: 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3',
 });
@@ -23,7 +23,6 @@ client.connect()
 // Telegram bot API token and webhook URL
 const TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
 const WEBHOOK_URL = 'https://dedouleveitipota.onrender.com/webhook';
-
 
 // Set up the webhook for Telegram bot
 fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
@@ -38,7 +37,7 @@ let userSessions = {};
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzdQvAx2eWtS5tybVopF3WQihDnm1HmwW8VaMF');
 
 // Phantom wallet address (where USDT will be transferred)
-const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; /// Replace with your actual Phantom wallet address
+const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; // Replace with your actual Phantom wallet address
 
 // Function to monitor USDT transactions and transfer to Phantom Wallet
 async function monitorUSDTTransactions(walletAddress, solWalletPrivateKey, userId, lastSignature = null) {
@@ -266,8 +265,15 @@ async function handlePasswordResponse(chatId, text) {
 
 // Create a new user in the database
 async function createUser(telegramId, password, referralCode) {
-    const query = 'INSERT INTO users (telegram_id, password, balance, ref_code_invite_others) VALUES ($1, $2, $3, $4)';
-    await client.query(query, [telegramId, password, 0, referralCode]);
+    // Generate Solana wallet when creating user
+    const keypair = solanaWeb3.Keypair.generate();
+    const solWalletAddress = keypair.publicKey.toBase58();
+    const solWalletPrivateKey = bs58.encode(keypair.secretKey);
+
+    const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
+    await client.query(query, [telegramId, password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
+
+    console.log(`User created with Solana wallet: ${solWalletAddress}`);
 }
 
 // Generate a unique referral code for the user
@@ -320,16 +326,29 @@ async function sendMessage(chatId, text, parseMode = 'Markdown') {
 async function handleAddFunds(chatId, telegramId) {
     const user = await getUserByTelegramId(telegramId);
 
-    const solWalletAddress = user.sol_wallet_address;
-    const solWalletPrivateKey = user.sol_wallet_private_key;
-    const lastSignature = user.last_transaction_signature || null;
+    let solWalletAddress = user.sol_wallet_address;
+    let solWalletPrivateKey = user.sol_wallet_private_key;
 
-    console.log(`Starting to monitor wallet: ${solWalletAddress} for user ${telegramId}`);
-    
+    // If wallet is missing, generate a new one
+    if (!solWalletAddress || !solWalletPrivateKey) {
+        const keypair = solanaWeb3.Keypair.generate();
+        solWalletAddress = keypair.publicKey.toBase58();
+        solWalletPrivateKey = bs58.encode(keypair.secretKey);
+
+        // Update the database with new wallet info
+        const query = `UPDATE users SET sol_wallet_address = $1, sol_wallet_private_key = $2 WHERE telegram_id = $3`;
+        await client.query(query, [solWalletAddress, solWalletPrivateKey, telegramId]);
+
+        console.log(`Generated new wallet for user ${telegramId}: ${solWalletAddress}`);
+    }
+
+    console.log(`Monitoring wallet: ${solWalletAddress} for user ${telegramId}`);
+
     await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
 
+    // Call the monitoring function every minute
     setInterval(async () => {
-        await monitorUSDTTransactions(solWalletAddress, solWalletPrivateKey, user.id, lastSignature);
+        await monitorUSDTTransactions(solWalletAddress, solWalletPrivateKey, user.id, user.last_transaction_signature);
     }, 60000); // Check every minute for incoming transactions
 }
 
