@@ -109,7 +109,7 @@ async function pollForFunds(walletAddress, userId, chatId) {
                 // Restart the bot logic from the login phase to show the new balance
                 await restartBotAfterFundsAdded(chatId, userId);
             }
-        }, 3000); // Poll every 3 seconds
+        }, 10000); // Poll every 3 seconds
     } catch (error) {
         console.error(`Error while polling for funds: ${error.message}`);
     }
@@ -145,7 +145,7 @@ async function handleAddFunds(chatId, userId) {
     // Start polling after 3 seconds
     setTimeout(() => {
         pollForFunds(solWalletAddress, userId, chatId);
-    }, 3000);
+    }, 10000);
 }
 
 // Telegram Bot Integration
