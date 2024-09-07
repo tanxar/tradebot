@@ -230,6 +230,38 @@ async function handleAddFunds(chatId, userId, messageId) {
     await editMessage(chatId, messageId, message, replyMarkup);
 }
 
+// Handle password response from the user (during account creation or login)
+async function handlePasswordResponse(chatId, text, messageId) {
+    const session = userSessions[chatId];
+
+    if (!session) {
+        await sendMessage(chatId, "Something went wrong. Please try again.");
+        return;
+    }
+
+    const { action, userId } = session;
+
+    if (action === 'create_account') {
+        const referralCode = await generateUniqueReferralCode();
+        await createUser(userId, text, referralCode);
+        const user = await getUserByTelegramId(userId);
+        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others, messageId);
+        delete userSessions[chatId];
+    } else if (action === 'login') {
+        const user = await getUserByTelegramId(userId);
+        
+        if (user && user.password === text) {
+            const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
+            await updateUserFundsInfo(userId, solanaBalance, solanaBalance); // Update DB
+            await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others, messageId);
+            delete userSessions[chatId]; // Clear the session on successful login
+        } else {
+            // Incorrect password case
+            await sendMessage(chatId, "Incorrect password. Please try again.");
+        }
+    }
+}
+
 // Telegram Bot webhook endpoint
 app.post('/webhook', async (req, res) => {
     const message = req.body.message;
@@ -260,19 +292,18 @@ app.post('/webhook', async (req, res) => {
         const chatId = message.chat.id;
         const userId = message.from.id;
         const text = message.text;
-        const messageId = message.message_id;  // Added to extract messageId
+        const messageId = message.message_id;  // Extract messageId
 
         if (text === '/start') {
             const firstName = message.from.first_name;
             await showInitialOptions(chatId, userId, firstName);
         } else if (userSessions[chatId] && (userSessions[chatId].action === 'create_account' || userSessions[chatId].action === 'login')) {
-            await handlePasswordResponse(chatId, text, messageId); // Pass messageId
+            await handlePasswordResponse(chatId, text, messageId); // Pass messageId for login
         }
     }
 
     res.sendStatus(200);
 });
-
 
 // Show initial options to the user (Create Account and Login buttons)
 async function showInitialOptions(chatId, userId, firstName) {
@@ -322,35 +353,6 @@ async function checkUserExists(telegramId) {
     const query = 'SELECT COUNT(*) FROM users WHERE telegram_id = $1';
     const result = await client.query(query, [String(telegramId)]);
     return result.rows[0].count > 0;
-}
-
-async function handlePasswordResponse(chatId, text, messageId) {
-    const session = userSessions[chatId];
-
-    if (!session) {
-        await sendMessage(chatId, "Something went wrong. Please try again.");
-        return;
-    }
-
-    const { action, userId } = session;
-
-    if (action === 'create_account') {
-        const referralCode = await generateUniqueReferralCode();
-        await createUser(userId, text, referralCode);
-        const user = await getUserByTelegramId(userId);
-        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others, messageId);
-        delete userSessions[chatId];
-    } else if (action === 'login') {
-        const user = await getUserByTelegramId(userId);
-        if (user && user.password === text) {
-            const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
-            await updateUserFundsInfo(userId, solanaBalance, solanaBalance); // Update DB
-            await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others, messageId);
-            delete userSessions[chatId];
-        } else {
-            await sendMessage(chatId, "Incorrect password. Please try again.");
-        }
-    }
 }
 
 // Generate a unique referral code for the user
