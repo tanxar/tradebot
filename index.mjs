@@ -161,7 +161,7 @@ async function restartBotAfterFundsAdded(chatId, userId) {
 }
 
 // Handle "Add Funds" when user clicks the button
-async function handleAddFunds(chatId, userId) {
+async function handleAddFunds(chatId, userId, messageId) {
     const user = await getUserByTelegramId(userId);
 
     let solWalletAddress = user.sol_wallet_address;
@@ -178,30 +178,28 @@ async function handleAddFunds(chatId, userId) {
         console.log(`Generated new wallet for user ${userId}: ${solWalletAddress}`);
     }
 
-    await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
+    // Edit the previous message instead of sending a new one
+    await editMessage(chatId, messageId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
 
     // Show "Check for Payment" button after funds are sent
-    await showCheckForPaymentButton(chatId);
+    await showCheckForPaymentButton(chatId, messageId);
 }
 
-// Function to show "Check for Payment" button after "Add Funds"
-async function showCheckForPaymentButton(chatId) {
-    const options = {
-        chat_id: chatId,
-        text: 'Once you have sent the funds, click the button below to check if payment has been received.',
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: 'Check for Payment', callback_data: 'check_payment' }],
-            ],
-        },
-    };
-
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+// Function to edit a message via Telegram
+async function editMessage(chatId, messageId, text, parseMode = 'Markdown') {
+    const url = `https://api.telegram.org/bot${TOKEN}/editMessageText`;
+    await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
+        body: JSON.stringify({
+            chat_id: chatId,
+            message_id: messageId,
+            text: text,
+            parse_mode: parseMode,
+        }),
     });
 }
+
 
 // Telegram Bot Integration
 app.post('/webhook', async (req, res) => {
@@ -211,6 +209,7 @@ app.post('/webhook', async (req, res) => {
     if (callbackQuery) {
         const chatId = callbackQuery.message.chat.id;
         const userId = callbackQuery.from.id;
+        const messageId = callbackQuery.message.message_id; // Get the message ID
         const data = callbackQuery.data;
 
         if (data === 'create_account') {
@@ -221,7 +220,7 @@ app.post('/webhook', async (req, res) => {
             await askForPassword(chatId, userId, 'login');
         } else if (data === 'add_funds') {
             console.log(`Add Funds button clicked by user ${userId}`);
-            await handleAddFunds(chatId, userId);
+            await handleAddFunds(chatId, userId, messageId); // Pass messageId
         } else if (data === 'check_payment') {
             console.log(`Check for Payment button clicked by user ${userId}`);
             await checkForFunds(chatId, userId);
