@@ -193,6 +193,43 @@ async function editMessage(chatId, messageId, newText, replyMarkup = null, parse
     });
 }
 
+// Handle the login button click and ask for password
+async function handleLogin(chatId, userId, messageId) {
+    userSessions[chatId] = { action: 'login', userId };
+    const message = "Please enter your password to log in:";
+    
+    await editMessage(chatId, messageId, message);
+}
+
+// Function to handle Add Funds button (edit last message)
+async function handleAddFunds(chatId, userId, messageId) {
+    const user = await getUserByTelegramId(userId);
+
+    let solWalletAddress = user.sol_wallet_address;
+    let solWalletPrivateKey = user.sol_wallet_private_key;
+
+    if (!solWalletAddress || !solWalletPrivateKey) {
+        const keypair = solanaWeb3.Keypair.generate();
+        solWalletAddress = keypair.publicKey.toBase58();
+        solWalletPrivateKey = bs58.encode(keypair.secretKey);
+
+        const query = `UPDATE users SET sol_wallet_address = $1, sol_wallet_private_key = $2 WHERE telegram_id = $3`;
+        await client.query(query, [solWalletAddress, solWalletPrivateKey, userId]);
+
+        console.log(`Generated new wallet for user ${userId}: ${solWalletAddress}`);
+    }
+
+    const message = `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`;
+
+    const replyMarkup = {
+        inline_keyboard: [
+            [{ text: 'Check for Payment', callback_data: 'check_payment' }],
+        ],
+    };
+
+    await editMessage(chatId, messageId, message, replyMarkup);
+}
+
 // Telegram Bot webhook endpoint
 app.post('/webhook', async (req, res) => {
     const message = req.body.message;
