@@ -130,7 +130,7 @@ async function createUser(telegramId, password, referralCode) {
 }
 
 // Function to handle "Check for Payment" button click
-async function checkForFunds(chatId, userId) {
+async function checkForFunds(chatId, userId, messageId) {
     const user = await getUserByTelegramId(userId);
     const solWalletAddress = user.sol_wallet_address;
 
@@ -144,20 +144,20 @@ async function checkForFunds(chatId, userId) {
         await updateUserBalanceInDB(userId, solanaBalance);
 
         const fundsAddedMessage = `Funds Added: ${solanaBalance - dbBalance} USDT. Restarting bot to update balance...`;
-        await sendMessage(chatId, fundsAddedMessage); // Notify user about added funds
+        await editMessage(chatId, messageId, fundsAddedMessage); // Edit the existing message
 
         // Restart the bot logic from the login phase to show the new balance
-        await restartBotAfterFundsAdded(chatId, userId);
+        await restartBotAfterFundsAdded(chatId, userId, messageId);
     } else {
-        await sendMessage(chatId, "No new funds detected. Please try again later.");
+        await editMessage(chatId, messageId, "No new funds detected. Please try again later."); // Edit existing message
     }
 }
 
 // Function to restart the bot after funds are detected
-async function restartBotAfterFundsAdded(chatId, userId) {
+async function restartBotAfterFundsAdded(chatId, userId, messageId) {
     const user = await getUserByTelegramId(userId);
     const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
-    await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
+    await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others, messageId);
 }
 
 // Handle "Add Funds" when user clicks the button
@@ -185,6 +185,26 @@ async function handleAddFunds(chatId, userId, messageId) {
     await showCheckForPaymentButton(chatId, messageId);
 }
 
+// Function to show "Check for Payment" button after "Add Funds"
+async function showCheckForPaymentButton(chatId, messageId) {
+    const options = {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: 'Check for Payment', callback_data: 'check_payment' }],
+            ],
+        },
+    };
+
+    const url = `https://api.telegram.org/bot${TOKEN}/editMessageReplyMarkup`;
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+    });
+}
+
 // Function to edit a message via Telegram
 async function editMessage(chatId, messageId, text, parseMode = 'Markdown') {
     const url = `https://api.telegram.org/bot${TOKEN}/editMessageText`;
@@ -200,7 +220,6 @@ async function editMessage(chatId, messageId, text, parseMode = 'Markdown') {
     });
 }
 
-
 // Telegram Bot Integration
 app.post('/webhook', async (req, res) => {
     const message = req.body.message;
@@ -214,16 +233,16 @@ app.post('/webhook', async (req, res) => {
 
         if (data === 'create_account') {
             console.log(`Create account clicked by user ${userId}`);
-            await askForPassword(chatId, userId, 'create_account');
+            await askForPassword(chatId, userId, 'create_account', messageId);
         } else if (data === 'login') {
             console.log(`Login button clicked by user ${userId}`);
-            await askForPassword(chatId, userId, 'login');
+            await askForPassword(chatId, userId, 'login', messageId);
         } else if (data === 'add_funds') {
             console.log(`Add Funds button clicked by user ${userId}`);
             await handleAddFunds(chatId, userId, messageId); // Pass messageId
         } else if (data === 'check_payment') {
             console.log(`Check for Payment button clicked by user ${userId}`);
-            await checkForFunds(chatId, userId);
+            await checkForFunds(chatId, userId, messageId); // Pass messageId
         }
     }
 
@@ -234,9 +253,9 @@ app.post('/webhook', async (req, res) => {
 
         if (text === '/start') {
             const firstName = message.from.first_name;
-            await showInitialOptions(chatId, userId, firstName);
+            await showInitialOptions(chatId, userId, firstName, message.message_id);
         } else if (userSessions[chatId] && (userSessions[chatId].action === 'create_account' || userSessions[chatId].action === 'login')) {
-            await handlePasswordResponse(chatId, text);
+            await handlePasswordResponse(chatId, text, message.message_id);
         }
     }
 
@@ -244,7 +263,7 @@ app.post('/webhook', async (req, res) => {
 });
 
 // Show initial options to the user (Create Account and Login buttons)
-async function showInitialOptions(chatId, userId, firstName) {
+async function showInitialOptions(chatId, userId, firstName, messageId) {
     const userExists = await checkUserExists(userId);
     let options;
 
@@ -252,6 +271,7 @@ async function showInitialOptions(chatId, userId, firstName) {
         const message = `Welcome back, ${firstName}!\n\nTelegram ID: ${userId}`;
         options = {
             chat_id: chatId,
+            message_id: messageId,
             text: message,
             reply_markup: {
                 inline_keyboard: [
@@ -263,6 +283,7 @@ async function showInitialOptions(chatId, userId, firstName) {
         const message = "Welcome! Please choose an option:";
         options = {
             chat_id: chatId,
+            message_id: messageId,
             text: message,
             reply_markup: {
                 inline_keyboard: [
@@ -272,7 +293,7 @@ async function showInitialOptions(chatId, userId, firstName) {
         };
     }
 
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${TOKEN}/editMessageText`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(options),
@@ -294,29 +315,22 @@ async function checkUserExists(telegramId) {
 }
 
 // Function to ask the user for a password (during account creation or login)
-async function askForPassword(chatId, userId, action) {
+async function askForPassword(chatId, userId, action, messageId) {
     const message = action === 'create_account'
         ? "Please choose a password to create your account:"
         : "Please enter your password to log in:";
 
     userSessions[chatId] = { action, userId };
 
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            chat_id: chatId,
-            text: message,
-        }),
-    });
+    await editMessage(chatId, messageId, message);
 }
 
 // Handle password response from the user (during account creation or login)
-async function handlePasswordResponse(chatId, text) {
+async function handlePasswordResponse(chatId, text, messageId) {
     const session = userSessions[chatId];
 
     if (!session) {
-        await sendMessage(chatId, "Something went wrong. Please try again.");
+        await editMessage(chatId, messageId, "Something went wrong. Please try again.");
         return;
     }
 
@@ -326,17 +340,17 @@ async function handlePasswordResponse(chatId, text) {
         const referralCode = await generateUniqueReferralCode();
         await createUser(userId, text, referralCode);
         const user = await getUserByTelegramId(userId);
-        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others);
+        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others, messageId);
         delete userSessions[chatId];
     } else if (action === 'login') {
         const user = await getUserByTelegramId(userId);
         if (user && user.password === text) {
             const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
             await updateUserBalanceInDB(userId, solanaBalance);
-            await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
+            await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others, messageId);
             delete userSessions[chatId];
         } else {
-            await sendMessage(chatId, "Incorrect password. Please try again.");
+            await editMessage(chatId, messageId, "Incorrect password. Please try again.");
         }
     }
 }
@@ -348,11 +362,12 @@ async function generateUniqueReferralCode() {
 }
 
 // Show welcome message after successful login or account creation
-async function showWelcomeMessage(chatId, userId, balance, referralCode) {
+async function showWelcomeMessage(chatId, userId, balance, referralCode, messageId) {
     const message = `Welcome back!\n\nYour balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\nClick and hold on the referral code to copy.`;
 
     const options = {
         chat_id: chatId,
+        message_id: messageId,
         text: message,
         parse_mode: 'HTML',
         reply_markup: {
@@ -363,25 +378,9 @@ async function showWelcomeMessage(chatId, userId, balance, referralCode) {
         },
     };
 
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${TOKEN}/editMessageText`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(options),
     });
 }
-
-// Function to send a message via Telegram
-async function sendMessage(chatId, text, parseMode = 'Markdown') {
-    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
-    });
-}
-
-// Start the server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
