@@ -386,10 +386,9 @@ async function showWelcomeMessage(chatId, userId, balance, referralCode, message
 }
 
 
+const PORT = process.env.PORT || 10000;
 
-// Start the server
-const PORT = 10000;
 app.listen(PORT, () => {
-    console.log(Server running on port ${PORT});
+    console.log(`Server running on port ${PORT}`);
 });
 
