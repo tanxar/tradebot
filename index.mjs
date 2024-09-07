@@ -21,7 +21,7 @@ client.connect()
     .catch(err => console.error("Error connecting to PostgreSQL:", err));
 
 // Telegram bot API token and webhook URL
-const TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'; // Replace with your actual bot token
+const TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE'; // Replace with your actual bot token
 const WEBHOOK_URL = 'https://dedouleveitipota.onrender.com/webhook';
 
 // Set up the webhook for Telegram bot
