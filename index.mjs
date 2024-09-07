@@ -250,6 +250,9 @@ async function handlePasswordResponse(chatId, text, messageId) {
     } else if (action === 'login') {
         const user = await getUserByTelegramId(userId);
         
+        // Log the user data to check if it's retrieved correctly
+        console.log('User Data:', user);
+
         if (user && user.password === text) {
             const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
             await updateUserFundsInfo(userId, solanaBalance, solanaBalance); // Update DB
