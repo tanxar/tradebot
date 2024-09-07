@@ -104,31 +104,27 @@ async function updateUserBalanceInDB(userId, newBalance) {
     }
 }
 
-// Function to poll USDT balance after user clicks "Add Funds"
-async function pollForFunds(walletAddress, userId, chatId) {
-    try {
-        console.log(`Polling for USDT funds for user ${userId}`);
+// Function to handle "Check for Payment" button click
+async function checkForFunds(chatId, userId) {
+    const user = await getUserByTelegramId(userId);
+    const solWalletAddress = user.sol_wallet_address;
 
-        // Get current DB balance
-        const dbBalance = await getUserBalanceFromDB(userId);
+    // Fetch current balance in wallet
+    const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(solWalletAddress);
 
-        // Poll every 30 seconds to avoid rate limiting
-        const pollingInterval = setInterval(async () => {
-            const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(walletAddress);
+    // Fetch balance from the database
+    const dbBalance = await getUserBalanceFromDB(userId);
 
-            if (solanaBalance > dbBalance) {
-                clearInterval(pollingInterval); // Stop polling when funds are detected
-                await updateUserBalanceInDB(userId, solanaBalance);
+    if (solanaBalance > dbBalance) {
+        await updateUserBalanceInDB(userId, solanaBalance);
 
-                const fundsAddedMessage = `Funds Added: ${solanaBalance - dbBalance} USDT. Restarting bot to update balance...`;
-                await sendMessage(chatId, fundsAddedMessage); // Notify user about added funds
+        const fundsAddedMessage = `Funds Added: ${solanaBalance - dbBalance} USDT. Restarting bot to update balance...`;
+        await sendMessage(chatId, fundsAddedMessage); // Notify user about added funds
 
-                // Restart the bot logic from the login phase to show the new balance
-                await restartBotAfterFundsAdded(chatId, userId);
-            }
-        }, 30000); // Poll every 30 seconds (adjust this based on your needs)
-    } catch (error) {
-        console.error(`Error while polling for funds: ${error.message}`);
+        // Restart the bot logic from the login phase to show the new balance
+        await restartBotAfterFundsAdded(chatId, userId);
+    } else {
+        await sendMessage(chatId, "No new funds detected. Please try again later.");
     }
 }
 
@@ -159,10 +155,27 @@ async function handleAddFunds(chatId, userId) {
 
     await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
 
-    // Start polling after 3 seconds
-    setTimeout(() => {
-        pollForFunds(solWalletAddress, userId, chatId);
-    }, 3000);
+    // Show "Check for Payment" button after funds are sent
+    await showCheckForPaymentButton(chatId);
+}
+
+// Function to show "Check for Payment" button after "Add Funds"
+async function showCheckForPaymentButton(chatId) {
+    const options = {
+        chat_id: chatId,
+        text: 'Once you have sent the funds, click the button below to check if payment has been received.',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: 'Check for Payment', callback_data: 'check_payment' }],
+            ],
+        },
+    };
+
+    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+    });
 }
 
 // Telegram Bot Integration
@@ -184,6 +197,9 @@ app.post('/webhook', async (req, res) => {
         } else if (data === 'add_funds') {
             console.log(`Add Funds button clicked by user ${userId}`);
             await handleAddFunds(chatId, userId);
+        } else if (data === 'check_payment') {
+            console.log(`Check for Payment button clicked by user ${userId}`);
+            await checkForFunds(chatId, userId);
         }
     }
 
