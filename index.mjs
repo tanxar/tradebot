@@ -21,7 +21,7 @@ client.connect()
     .catch(err => console.error("Error connecting to PostgreSQL:", err));
 
 // Telegram bot API token and webhook URL
-const TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
+const TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'; // Replace with your actual bot token
 const WEBHOOK_URL = 'https://dedouleveitipota.onrender.com/webhook';
 
 // Set up the webhook for Telegram bot
@@ -37,7 +37,7 @@ let userSessions = {};
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
 // Your Solana private key (converted from base58)
-const myAccountPrivateKey = bs58.decode('52P39r6ywe5TmjM6aYxx7mYbYrL5ov8pdAW7vvH7dNSF8WSpWr1tVc9hYrtUmjfyJgPEnz5WTYopgicymcSYWTfe');
+const myAccountPrivateKey = bs58.decode('YOUR_BASE58_PRIVATE_KEY'); // Replace with your actual private key
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 // Function to fetch USDT balance or create token account if none exists
@@ -129,8 +129,8 @@ async function createUser(telegramId, password, referralCode) {
     console.log(`User created with Solana wallet: ${solWalletAddress}`);
 }
 
-// Function to handle "Check for Payment" button click
-async function checkForFunds(chatId, userId) {
+// Function to check for funds and either edit the message or send a new one
+async function checkForFunds(chatId, userId, messageId) {
     const user = await getUserByTelegramId(userId);
     const solWalletAddress = user.sol_wallet_address;
 
@@ -149,7 +149,7 @@ async function checkForFunds(chatId, userId) {
         // Restart the bot logic from the login phase to show the new balance
         await restartBotAfterFundsAdded(chatId, userId);
     } else {
-        await sendMessage(chatId, "No new funds detected. Please try again later.");
+        await sendMessage(chatId, "No new funds detected. Please try again later."); // Send a new message if no funds are found
     }
 }
 
@@ -160,8 +160,49 @@ async function restartBotAfterFundsAdded(chatId, userId) {
     await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
 }
 
-// Handle "Add Funds" when user clicks the button
-async function handleAddFunds(chatId, userId) {
+// Function to show "Check for Payment" button
+async function showCheckForPaymentButton(chatId, messageId) {
+    const options = {
+        chat_id: chatId,
+        message_id: messageId,
+        text: 'Once you have sent the funds, click the button below to check if payment has been received.',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: 'Check for Payment', callback_data: 'check_payment' }],
+            ],
+        },
+    };
+
+    await fetch(`https://api.telegram.org/bot${TOKEN}/editMessageText`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+    });
+}
+
+// Function to edit a message in response to a button click
+async function editMessage(chatId, messageId, newText, replyMarkup = null, parseMode = 'HTML') {
+    const url = `https://api.telegram.org/bot${TOKEN}/editMessageText`;
+    const body = {
+        chat_id: chatId,
+        message_id: messageId,
+        text: newText,
+        parse_mode: parseMode,
+    };
+
+    if (replyMarkup) {
+        body.reply_markup = replyMarkup;
+    }
+
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+}
+
+// Handle "Add Funds" when user clicks the button (edit the message instead of sending a new one)
+async function handleAddFunds(chatId, userId, messageId) {
     const user = await getUserByTelegramId(userId);
 
     let solWalletAddress = user.sol_wallet_address;
@@ -178,29 +219,16 @@ async function handleAddFunds(chatId, userId) {
         console.log(`Generated new wallet for user ${userId}: ${solWalletAddress}`);
     }
 
-    await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
+    const message = `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`;
 
-    // Show "Check for Payment" button after funds are sent
-    await showCheckForPaymentButton(chatId);
-}
-
-// Function to show "Check for Payment" button after "Add Funds"
-async function showCheckForPaymentButton(chatId) {
-    const options = {
-        chat_id: chatId,
-        text: 'Once you have sent the funds, click the button below to check if payment has been received.',
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: 'Check for Payment', callback_data: 'check_payment' }],
-            ],
-        },
+    // Edit the message instead of sending a new one
+    const replyMarkup = {
+        inline_keyboard: [
+            [{ text: 'Check for Payment', callback_data: 'check_payment' }],
+        ],
     };
 
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
-    });
+    await editMessage(chatId, messageId, message, replyMarkup);
 }
 
 // Telegram Bot Integration
@@ -211,6 +239,7 @@ app.post('/webhook', async (req, res) => {
     if (callbackQuery) {
         const chatId = callbackQuery.message.chat.id;
         const userId = callbackQuery.from.id;
+        const messageId = callbackQuery.message.message_id;
         const data = callbackQuery.data;
 
         if (data === 'create_account') {
@@ -221,10 +250,10 @@ app.post('/webhook', async (req, res) => {
             await askForPassword(chatId, userId, 'login');
         } else if (data === 'add_funds') {
             console.log(`Add Funds button clicked by user ${userId}`);
-            await handleAddFunds(chatId, userId);
+            await handleAddFunds(chatId, userId, messageId);
         } else if (data === 'check_payment') {
             console.log(`Check for Payment button clicked by user ${userId}`);
-            await checkForFunds(chatId, userId);
+            await checkForFunds(chatId, userId, messageId);
         }
     }
 
