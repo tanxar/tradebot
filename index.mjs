@@ -37,7 +37,7 @@ let userSessions = {};
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
 // Your Solana private key (converted from base58)
-const myAccountPrivateKey = bs58.decode('17od4rpGRYLw1XXd84SFtyQ5y6rJtkpab1SAm7XsBxHdj1kVEqw1jVN58bDPPFDB44WjgVCHA3vK3ryLHRUsycu');
+const myAccountPrivateKey = bs58.decode('52P39r6ywe5TmjM6aYxx7mYbYrL5ov8pdAW7vvH7dNSF8WSpWr1tVc9hYrtUmjfyJgPEnz5WTYopgicymcSYWTfe');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 // Function to fetch USDT balance or create token account if none exists
@@ -130,7 +130,7 @@ async function createUser(telegramId, password, referralCode) {
 }
 
 // Function to handle "Check for Payment" button click
-async function checkForFunds(chatId, userId, messageId) {
+async function checkForFunds(chatId, userId) {
     const user = await getUserByTelegramId(userId);
     const solWalletAddress = user.sol_wallet_address;
 
@@ -144,24 +144,24 @@ async function checkForFunds(chatId, userId, messageId) {
         await updateUserBalanceInDB(userId, solanaBalance);
 
         const fundsAddedMessage = `Funds Added: ${solanaBalance - dbBalance} USDT. Restarting bot to update balance...`;
-        await editMessage(chatId, messageId, fundsAddedMessage); // Edit the existing message
+        await sendMessage(chatId, fundsAddedMessage); // Notify user about added funds
 
         // Restart the bot logic from the login phase to show the new balance
-        await restartBotAfterFundsAdded(chatId, userId, messageId);
+        await restartBotAfterFundsAdded(chatId, userId);
     } else {
-        await editMessage(chatId, messageId, "No new funds detected. Please try again later."); // Edit existing message
+        await sendMessage(chatId, "No new funds detected. Please try again later.");
     }
 }
 
 // Function to restart the bot after funds are detected
-async function restartBotAfterFundsAdded(chatId, userId, messageId) {
+async function restartBotAfterFundsAdded(chatId, userId) {
     const user = await getUserByTelegramId(userId);
     const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
-    await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others, messageId);
+    await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
 }
 
 // Handle "Add Funds" when user clicks the button
-async function handleAddFunds(chatId, userId, messageId) {
+async function handleAddFunds(chatId, userId) {
     const user = await getUserByTelegramId(userId);
 
     let solWalletAddress = user.sol_wallet_address;
@@ -178,18 +178,17 @@ async function handleAddFunds(chatId, userId, messageId) {
         console.log(`Generated new wallet for user ${userId}: ${solWalletAddress}`);
     }
 
-    // Edit the previous message instead of sending a new one
-    await editMessage(chatId, messageId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
+    await sendMessage(chatId, `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`, 'HTML');
 
     // Show "Check for Payment" button after funds are sent
-    await showCheckForPaymentButton(chatId, messageId);
+    await showCheckForPaymentButton(chatId);
 }
 
 // Function to show "Check for Payment" button after "Add Funds"
-async function showCheckForPaymentButton(chatId, messageId) {
+async function showCheckForPaymentButton(chatId) {
     const options = {
         chat_id: chatId,
-        message_id: messageId,
+        text: 'Once you have sent the funds, click the button below to check if payment has been received.',
         reply_markup: {
             inline_keyboard: [
                 [{ text: 'Check for Payment', callback_data: 'check_payment' }],
@@ -197,26 +196,10 @@ async function showCheckForPaymentButton(chatId, messageId) {
         },
     };
 
-    const url = `https://api.telegram.org/bot${TOKEN}/editMessageReplyMarkup`;
-    await fetch(url, {
+    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(options),
-    });
-}
-
-// Function to edit a message via Telegram
-async function editMessage(chatId, messageId, text, parseMode = 'Markdown') {
-    const url = `https://api.telegram.org/bot${TOKEN}/editMessageText`;
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            chat_id: chatId,
-            message_id: messageId,
-            text: text,
-            parse_mode: parseMode,
-        }),
     });
 }
 
@@ -228,21 +211,20 @@ app.post('/webhook', async (req, res) => {
     if (callbackQuery) {
         const chatId = callbackQuery.message.chat.id;
         const userId = callbackQuery.from.id;
-        const messageId = callbackQuery.message.message_id; // Get the message ID
         const data = callbackQuery.data;
 
         if (data === 'create_account') {
             console.log(`Create account clicked by user ${userId}`);
-            await askForPassword(chatId, userId, 'create_account', messageId);
+            await askForPassword(chatId, userId, 'create_account');
         } else if (data === 'login') {
             console.log(`Login button clicked by user ${userId}`);
-            await askForPassword(chatId, userId, 'login', messageId);
+            await askForPassword(chatId, userId, 'login');
         } else if (data === 'add_funds') {
             console.log(`Add Funds button clicked by user ${userId}`);
-            await handleAddFunds(chatId, userId, messageId); // Pass messageId
+            await handleAddFunds(chatId, userId);
         } else if (data === 'check_payment') {
             console.log(`Check for Payment button clicked by user ${userId}`);
-            await checkForFunds(chatId, userId, messageId); // Pass messageId
+            await checkForFunds(chatId, userId);
         }
     }
 
@@ -253,9 +235,9 @@ app.post('/webhook', async (req, res) => {
 
         if (text === '/start') {
             const firstName = message.from.first_name;
-            await showInitialOptions(chatId, userId, firstName, message.message_id);
+            await showInitialOptions(chatId, userId, firstName);
         } else if (userSessions[chatId] && (userSessions[chatId].action === 'create_account' || userSessions[chatId].action === 'login')) {
-            await handlePasswordResponse(chatId, text, message.message_id);
+            await handlePasswordResponse(chatId, text);
         }
     }
 
@@ -263,7 +245,7 @@ app.post('/webhook', async (req, res) => {
 });
 
 // Show initial options to the user (Create Account and Login buttons)
-async function showInitialOptions(chatId, userId, firstName, messageId) {
+async function showInitialOptions(chatId, userId, firstName) {
     const userExists = await checkUserExists(userId);
     let options;
 
@@ -271,7 +253,6 @@ async function showInitialOptions(chatId, userId, firstName, messageId) {
         const message = `Welcome back, ${firstName}!\n\nTelegram ID: ${userId}`;
         options = {
             chat_id: chatId,
-            message_id: messageId,
             text: message,
             reply_markup: {
                 inline_keyboard: [
@@ -283,7 +264,6 @@ async function showInitialOptions(chatId, userId, firstName, messageId) {
         const message = "Welcome! Please choose an option:";
         options = {
             chat_id: chatId,
-            message_id: messageId,
             text: message,
             reply_markup: {
                 inline_keyboard: [
@@ -293,7 +273,7 @@ async function showInitialOptions(chatId, userId, firstName, messageId) {
         };
     }
 
-    await fetch(`https://api.telegram.org/bot${TOKEN}/editMessageText`, {
+    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(options),
@@ -315,22 +295,29 @@ async function checkUserExists(telegramId) {
 }
 
 // Function to ask the user for a password (during account creation or login)
-async function askForPassword(chatId, userId, action, messageId) {
+async function askForPassword(chatId, userId, action) {
     const message = action === 'create_account'
         ? "Please choose a password to create your account:"
         : "Please enter your password to log in:";
 
     userSessions[chatId] = { action, userId };
 
-    await editMessage(chatId, messageId, message);
+    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+        }),
+    });
 }
 
 // Handle password response from the user (during account creation or login)
-async function handlePasswordResponse(chatId, text, messageId) {
+async function handlePasswordResponse(chatId, text) {
     const session = userSessions[chatId];
 
     if (!session) {
-        await editMessage(chatId, messageId, "Something went wrong. Please try again.");
+        await sendMessage(chatId, "Something went wrong. Please try again.");
         return;
     }
 
@@ -340,17 +327,17 @@ async function handlePasswordResponse(chatId, text, messageId) {
         const referralCode = await generateUniqueReferralCode();
         await createUser(userId, text, referralCode);
         const user = await getUserByTelegramId(userId);
-        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others, messageId);
+        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others);
         delete userSessions[chatId];
     } else if (action === 'login') {
         const user = await getUserByTelegramId(userId);
         if (user && user.password === text) {
             const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
             await updateUserBalanceInDB(userId, solanaBalance);
-            await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others, messageId);
+            await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
             delete userSessions[chatId];
         } else {
-            await editMessage(chatId, messageId, "Incorrect password. Please try again.");
+            await sendMessage(chatId, "Incorrect password. Please try again.");
         }
     }
 }
@@ -362,12 +349,11 @@ async function generateUniqueReferralCode() {
 }
 
 // Show welcome message after successful login or account creation
-async function showWelcomeMessage(chatId, userId, balance, referralCode, messageId) {
+async function showWelcomeMessage(chatId, userId, balance, referralCode) {
     const message = `Welcome back!\n\nYour balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\nClick and hold on the referral code to copy.`;
 
     const options = {
         chat_id: chatId,
-        message_id: messageId,
         text: message,
         parse_mode: 'HTML',
         reply_markup: {
@@ -378,17 +364,25 @@ async function showWelcomeMessage(chatId, userId, balance, referralCode, message
         },
     };
 
-    await fetch(`https://api.telegram.org/bot${TOKEN}/editMessageText`, {
+    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(options),
     });
 }
 
+// Function to send a message via Telegram
+async function sendMessage(chatId, text, parseMode = 'Markdown') {
+    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
+    });
+}
 
-const PORT = process.env.PORT || 10000;
-
+// Start the server
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
-
