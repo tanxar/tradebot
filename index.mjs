@@ -260,17 +260,19 @@ app.post('/webhook', async (req, res) => {
         const chatId = message.chat.id;
         const userId = message.from.id;
         const text = message.text;
+        const messageId = message.message_id;  // Added to extract messageId
 
         if (text === '/start') {
             const firstName = message.from.first_name;
             await showInitialOptions(chatId, userId, firstName);
         } else if (userSessions[chatId] && (userSessions[chatId].action === 'create_account' || userSessions[chatId].action === 'login')) {
-            await handlePasswordResponse(chatId, text);
+            await handlePasswordResponse(chatId, text, messageId); // Pass messageId
         }
     }
 
     res.sendStatus(200);
 });
+
 
 // Show initial options to the user (Create Account and Login buttons)
 async function showInitialOptions(chatId, userId, firstName) {
@@ -322,8 +324,7 @@ async function checkUserExists(telegramId) {
     return result.rows[0].count > 0;
 }
 
-// Handle password response from the user (during account creation or login)
-async function handlePasswordResponse(chatId, text) {
+async function handlePasswordResponse(chatId, text, messageId) {
     const session = userSessions[chatId];
 
     if (!session) {
