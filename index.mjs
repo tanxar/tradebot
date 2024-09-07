@@ -39,27 +39,44 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 // Phantom wallet address (where USDT will be transferred)
 const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; // Replace with your actual Phantom wallet address
 
-// Function to fetch USDT balance using Solana Web3.js
-async function fetchUSDTBalanceFromSolana(walletAddress) {
+// Function to fetch USDT balance or create token account if none exists
+async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
     try {
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+        const walletPublicKey = new solanaWeb3.PublicKey(walletAddress);
+        const usdtMintPublicKey = new solanaWeb3.PublicKey(usdtMintAddress); // USDT mint address
 
-        // Get all token accounts by the owner (wallet address) for USDT mint
+        // Get all token accounts for the wallet
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-            new solanaWeb3.PublicKey(walletAddress),
-            { mint: usdtMintAddress }
+            walletPublicKey,
+            { mint: usdtMintPublicKey }
         );
 
-        if (tokenAccounts.value.length > 0) {
-            const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
-            const balance = tokenAccount.tokenAmount.uiAmount;
-            return balance; // Return USDT balance
-        } else {
-            console.log(`No USDT token accounts found for wallet ${walletAddress}`);
-            return 0;
+        // If no token accounts found, create a new associated token account for USDT
+        if (tokenAccounts.value.length === 0) {
+            console.log(`No USDT token accounts found for wallet ${walletAddress}. Creating a new token account...`);
+
+            const payerKeypair = solanaWeb3.Keypair.generate(); // Replace with the payer of transaction fees
+            const associatedTokenAccount = await getOrCreateAssociatedTokenAccount(
+                connection,
+                payerKeypair,        // Payer for transaction fees
+                usdtMintPublicKey,   // USDT mint address
+                walletPublicKey      // Wallet public key for which the token account will be created
+            );
+
+            console.log(`USDT token account created: ${associatedTokenAccount.address.toBase58()}`);
+            return 0; // Balance is 0 since it's a new token account
         }
+
+        // If token account found, return the balance
+        const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
+        const balance = tokenAccount.tokenAmount.uiAmount;
+
+        console.log(`USDT balance in wallet: ${balance}`);
+        return balance;
+
     } catch (error) {
-        console.error(`Error fetching USDT balance from Solana: ${error.message}`);
+        console.error(`Error fetching or creating USDT token account: ${error.message}`);
         return 0;
     }
 }
@@ -95,9 +112,9 @@ async function pollForFunds(walletAddress, userId, chatId) {
         // Get current DB balance
         const dbBalance = await getUserBalanceFromDB(userId);
 
-        // Poll every 3 seconds
+        // Poll every 30 seconds to avoid rate limiting
         const pollingInterval = setInterval(async () => {
-            const solanaBalance = await fetchUSDTBalanceFromSolana(walletAddress);
+            const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(walletAddress);
 
             if (solanaBalance > dbBalance) {
                 clearInterval(pollingInterval); // Stop polling when funds are detected
@@ -109,7 +126,7 @@ async function pollForFunds(walletAddress, userId, chatId) {
                 // Restart the bot logic from the login phase to show the new balance
                 await restartBotAfterFundsAdded(chatId, userId);
             }
-        }, 10000); // Poll every 3 seconds
+        }, 30000); // Poll every 30 seconds (adjust this based on your needs)
     } catch (error) {
         console.error(`Error while polling for funds: ${error.message}`);
     }
@@ -118,7 +135,7 @@ async function pollForFunds(walletAddress, userId, chatId) {
 // Function to restart the bot after funds are detected
 async function restartBotAfterFundsAdded(chatId, userId) {
     const user = await getUserByTelegramId(userId);
-    const solanaBalance = await fetchUSDTBalanceFromSolana(user.sol_wallet_address);
+    const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
     await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
 }
 
@@ -145,7 +162,7 @@ async function handleAddFunds(chatId, userId) {
     // Start polling after 3 seconds
     setTimeout(() => {
         pollForFunds(solWalletAddress, userId, chatId);
-    }, 10000);
+    }, 3000);
 }
 
 // Telegram Bot Integration
@@ -274,7 +291,7 @@ async function handlePasswordResponse(chatId, text) {
     } else if (action === 'login') {
         const user = await getUserByTelegramId(userId);
         if (user && user.password === text) {
-            const solanaBalance = await fetchUSDTBalanceFromSolana(user.sol_wallet_address);
+            const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
             await updateUserBalanceInDB(userId, solanaBalance);
             await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
             delete userSessions[chatId];
