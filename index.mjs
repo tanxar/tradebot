@@ -3,7 +3,7 @@ import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 import pkg from 'pg';
 import * as solanaWeb3 from '@solana/web3.js';
-import { getOrCreateAssociatedTokenAccount, transfer, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { getOrCreateAssociatedTokenAccount } from '@solana/spl-token';
 import bs58 from 'bs58'; // For decoding base58 private keys
 
 const { Client } = pkg;
@@ -36,9 +36,6 @@ let userSessions = {};
 // USDT Mint Address on Solana
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
-// Phantom wallet address (where USDT will be transferred)
-const phantomWalletAddress = 'G2XNkLGnHeFTCj5Eb328t49aV2xL3rYmrwugg4n3BPHm'; // Replace with your actual Phantom wallet address
-
 // Function to fetch USDT balance or create token account if none exists
 async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
     try {
@@ -52,27 +49,17 @@ async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
             { mint: usdtMintPublicKey }
         );
 
-        // If no token accounts found, create a new associated token account for USDT
         if (tokenAccounts.value.length === 0) {
             console.log(`No USDT token accounts found for wallet ${walletAddress}. Creating a new token account...`);
 
-            const payerKeypair = solanaWeb3.Keypair.generate(); // Replace with the payer of transaction fees
-            const associatedTokenAccount = await getOrCreateAssociatedTokenAccount(
-                connection,
-                payerKeypair,        // Payer for transaction fees
-                usdtMintPublicKey,   // USDT mint address
-                walletPublicKey      // Wallet public key for which the token account will be created
-            );
-
-            console.log(`USDT token account created: ${associatedTokenAccount.address.toBase58()}`);
-            return 0; // Balance is 0 since it's a new token account
+            // Use the user's own wallet to pay fees when they send USDT
+            // The actual creation of the token account happens when the user sends USDT
+            return 0; // Assume balance is 0 since the wallet was just created
         }
 
-        // If token account found, return the balance
+        // If token account exists, return the balance
         const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
         const balance = tokenAccount.tokenAmount.uiAmount;
-
-        console.log(`USDT balance in wallet: ${balance}`);
         return balance;
 
     } catch (error) {
@@ -258,14 +245,14 @@ async function showInitialOptions(chatId, userId, firstName) {
 // Function to get user by Telegram ID
 async function getUserByTelegramId(telegramId) {
     const query = 'SELECT * FROM users WHERE telegram_id = $1';
-    const result = await client.query(query, [telegramId]);
+    const result = await client.query(query, [String(telegramId)]);
     return result.rows[0];
 }
 
 // Check if user exists in the database by Telegram ID
 async function checkUserExists(telegramId) {
     const query = 'SELECT COUNT(*) FROM users WHERE telegram_id = $1';
-    const result = await client.query(query, [telegramId]);
+    const result = await client.query(query, [String(telegramId)]);
     return result.rows[0].count > 0;
 }
 
@@ -324,7 +311,7 @@ async function createUser(telegramId, password, referralCode) {
     const solWalletPrivateKey = bs58.encode(keypair.secretKey);
 
     const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
-    await client.query(query, [telegramId, password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
+    await client.query(query, [String(telegramId), password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
 
     console.log(`User created with Solana wallet: ${solWalletAddress}`);
 }
