@@ -3,6 +3,7 @@ import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 import pkg from 'pg';
 import * as solanaWeb3 from '@solana/web3.js';
+import { getOrCreateAssociatedTokenAccount } from '@solana/spl-token';
 import bs58 from 'bs58'; // For decoding base58 private keys
 
 const { Client } = pkg;
@@ -50,7 +51,7 @@ async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
     try {
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
         const walletPublicKey = new solanaWeb3.PublicKey(walletAddress);
-        const usdtMintPublicKey = new solanaWeb3.PublicKey(usdtMintAddress);
+        const usdtMintPublicKey = new solanaWeb3.PublicKey(usdtMintAddress); // USDT mint address
 
         // Get all token accounts for the wallet
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
@@ -59,8 +60,8 @@ async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
         );
 
         if (tokenAccounts.value.length === 0) {
-            console.log(`No USDT token accounts found for wallet ${walletAddress}.`);
-            return 0; // Assume balance is 0 since no token account exists
+            console.log(`No USDT token accounts found for wallet ${walletAddress}. Creating a new token account...`);
+            return 0; // Assume balance is 0 since the wallet was just created
         }
 
         // If token account exists, return the balance
@@ -77,39 +78,61 @@ async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
 // Function to get user's current balance from the database
 async function getUserBalanceFromDB(userId) {
     try {
-        const query = 'SELECT balance, total_funds_sent, last_checked_balance FROM users WHERE id = $1';
+        const query = 'SELECT balance FROM users WHERE id = $1';
         const result = await client.query(query, [userId]);
-        return result.rows.length > 0 ? result.rows[0] : { balance: 0, total_funds_sent: 0, last_checked_balance: 0 };
+        return result.rows.length > 0 ? result.rows[0].balance : 0;
     } catch (error) {
         console.error(`Error fetching user balance from DB: ${error.message}`);
-        return { balance: 0, total_funds_sent: 0, last_checked_balance: 0 };
+        return 0;
     }
 }
 
-// Function to update user's balance and total funds sent in the database
-async function updateUserFundsInfo(userId, totalFundsSent, lastCheckedBalance) {
+// Function to update user's balance in the database
+async function updateUserBalanceInDB(userId, newBalance) {
     try {
-        const query = `
-            UPDATE users
-            SET total_funds_sent = $1, last_checked_balance = $2
-            WHERE id = $3
-        `;
-        await client.query(query, [totalFundsSent, lastCheckedBalance, userId]);
-        console.log(`Updated user ${userId}'s total funds sent to ${totalFundsSent} and last checked balance to ${lastCheckedBalance}`);
+        const query = 'UPDATE users SET balance = $1 WHERE id = $2';
+        await client.query(query, [newBalance, userId]);
+        console.log(`Updated user ${userId}'s balance to ${newBalance}`);
     } catch (error) {
-        console.error(`Error updating user funds info in DB: ${error.message}`);
+        console.error(`Error updating user balance in DB: ${error.message}`);
     }
 }
 
-// Function to update last checked balance in the database
-async function updateLastCheckedBalance(userId, lastCheckedBalance) {
+// Fund newly created wallet with 0.0022 SOL
+async function fundNewWallet(newWalletPublicKey) {
     try {
-        const query = 'UPDATE users SET last_checked_balance = $1 WHERE id = $2';
-        await client.query(query, [lastCheckedBalance, userId]);
-        console.log(`Updated user ${userId}'s last checked balance to ${lastCheckedBalance}`);
+        const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+
+        // Create the transaction to send SOL
+        const transaction = new solanaWeb3.Transaction().add(
+            solanaWeb3.SystemProgram.transfer({
+                fromPubkey: myKeypair.publicKey,
+                toPubkey: newWalletPublicKey,
+                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022,
+            })
+        );
+
+        // Send the transaction
+        const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
+        console.log(`Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature}`);
     } catch (error) {
-        console.error(`Error updating last checked balance in DB: ${error.message}`);
+        console.error(`Error funding new wallet: ${error.message}`);
     }
+}
+
+// Function to create a new user in the database
+async function createUser(telegramId, password, referralCode) {
+    const keypair = solanaWeb3.Keypair.generate();
+    const solWalletAddress = keypair.publicKey.toBase58();
+    const solWalletPrivateKey = bs58.encode(keypair.secretKey);
+
+    // Fund the newly created wallet with 0.0022 SOL
+    await fundNewWallet(keypair.publicKey);
+
+    const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
+    await client.query(query, [String(telegramId), password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
+
+    console.log(`User created with Solana wallet: ${solWalletAddress}`);
 }
 
 // Function to check for funds and avoid redundant notifications
@@ -120,56 +143,28 @@ async function checkForFunds(chatId, userId, messageId) {
     // Fetch current balance in wallet
     const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(solWalletAddress);
 
-    // Fetch the user's total funds sent and last checked balance from the database
-    const totalFundsSent = user.total_funds_sent || 0;
-    const lastCheckedBalance = user.last_checked_balance || 0;
+    // Fetch balance from the database
+    const dbBalance = await getUserBalanceFromDB(userId);
 
-    if (solanaBalance > totalFundsSent) {
-        const newFunds = solanaBalance - totalFundsSent;
-
-        // Update the user's total funds sent and last checked balance in the database
-        await updateUserFundsInfo(userId, solanaBalance, solanaBalance);
+    if (solanaBalance > dbBalance) {
+        const newFunds = solanaBalance - dbBalance;
+        await updateUserBalanceInDB(userId, solanaBalance);
 
         const fundsAddedMessage = `Funds Added: ${newFunds} USDT. Restarting bot to update balance...`;
-        await editMessage(chatId, messageId, fundsAddedMessage); // Edit last message with the added funds info
+        await sendMessage(chatId, fundsAddedMessage); // Notify user about added funds
 
         // Restart the bot logic from the login phase to show the new balance
-        await restartBotAfterFundsAdded(chatId, userId, messageId);
-    } else if (solanaBalance === lastCheckedBalance) {
-        // If no new funds were added, notify the user
-        await editMessage(chatId, messageId, "No new funds detected. Please try again later.");
+        await restartBotAfterFundsAdded(chatId, userId);
     } else {
-        // In case balance was reduced (for whatever reason), update the last checked balance
-        await updateLastCheckedBalance(userId, solanaBalance);
-        await editMessage(chatId, messageId, "No new funds detected.");
+        await sendMessage(chatId, "No new funds detected. Please try again later.");
     }
 }
 
-// Function to restart the bot after funds are detected (edit last message instead of sending new message)
-async function restartBotAfterFundsAdded(chatId, userId, messageId) {
+// Function to restart the bot after funds are detected
+async function restartBotAfterFundsAdded(chatId, userId) {
     const user = await getUserByTelegramId(userId);
     const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
-    await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others, messageId);
-}
-
-// Function to show welcome message after successful login or account creation (edit message instead of sending new one)
-async function showWelcomeMessage(chatId, userId, balance, referralCode, messageId) {
-    const message = `Welcome back!\n\nYour balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\nClick and hold on the referral code to copy.`;
-
-    const options = {
-        chat_id: chatId,
-        message_id: messageId,
-        text: message,
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "Add Funds", callback_data: "add_funds" }],
-                [{ text: "Logout", callback_data: "logout" }],
-            ],
-        },
-    };
-
-    await editMessage(chatId, messageId, message, options.reply_markup);
+    await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
 }
 
 // Function to edit a message in response to a button click
@@ -201,7 +196,7 @@ async function handleLogin(chatId, userId, messageId) {
     await editMessage(chatId, messageId, message);
 }
 
-// Function to handle Add Funds button (edit last message)
+// Handle "Add Funds" when user clicks the button (edit the message instead of sending a new one)
 async function handleAddFunds(chatId, userId, messageId) {
     const user = await getUserByTelegramId(userId);
 
@@ -221,6 +216,7 @@ async function handleAddFunds(chatId, userId, messageId) {
 
     const message = `Please send USDT to your Solana wallet address:\n<code>${solWalletAddress}</code>`;
 
+    // Edit the message instead of sending a new one
     const replyMarkup = {
         inline_keyboard: [
             [{ text: 'Check for Payment', callback_data: 'check_payment' }],
@@ -228,41 +224,6 @@ async function handleAddFunds(chatId, userId, messageId) {
     };
 
     await editMessage(chatId, messageId, message, replyMarkup);
-}
-
-// Handle password response from the user (during account creation or login)
-async function handlePasswordResponse(chatId, text, messageId) {
-    const session = userSessions[chatId];
-
-    if (!session) {
-        await sendMessage(chatId, "Something went wrong. Please try again.");
-        return;
-    }
-
-    const { action, userId } = session;
-
-    if (action === 'create_account') {
-        const referralCode = await generateUniqueReferralCode();
-        await createUser(userId, text, referralCode);
-        const user = await getUserByTelegramId(userId);
-        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others, messageId);
-        delete userSessions[chatId];
-    } else if (action === 'login') {
-        const user = await getUserByTelegramId(userId);
-        
-        // Log the user data to check if it's retrieved correctly
-        console.log('User Data:', user);
-
-        if (user && user.password === text) {
-            const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
-            await updateUserFundsInfo(userId, solanaBalance, solanaBalance); // Update DB
-            await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others, messageId);
-            delete userSessions[chatId]; // Clear the session on successful login
-        } else {
-            // Incorrect password case
-            await sendMessage(chatId, "Incorrect password. Please try again.");
-        }
-    }
 }
 
 // Telegram Bot webhook endpoint
@@ -278,7 +239,7 @@ app.post('/webhook', async (req, res) => {
 
         if (data === 'create_account') {
             console.log(`Create account clicked by user ${userId}`);
-            await askForPassword(chatId, userId, 'create_account', messageId);
+            await askForPassword(chatId, userId, 'create_account');
         } else if (data === 'login') {
             console.log(`Login button clicked by user ${userId}`);
             await handleLogin(chatId, userId, messageId);
@@ -295,13 +256,12 @@ app.post('/webhook', async (req, res) => {
         const chatId = message.chat.id;
         const userId = message.from.id;
         const text = message.text;
-        const messageId = message.message_id;  // Extract messageId
 
         if (text === '/start') {
             const firstName = message.from.first_name;
             await showInitialOptions(chatId, userId, firstName);
         } else if (userSessions[chatId] && (userSessions[chatId].action === 'create_account' || userSessions[chatId].action === 'login')) {
-            await handlePasswordResponse(chatId, text, messageId); // Pass messageId for login
+            await handlePasswordResponse(chatId, text);
         }
     }
 
@@ -362,6 +322,59 @@ async function checkUserExists(telegramId) {
 async function generateUniqueReferralCode() {
     const randomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     return randomCode;
+}
+
+// Handle password response from the user (during account creation or login)
+async function handlePasswordResponse(chatId, text) {
+    const session = userSessions[chatId];
+
+    if (!session) {
+        await sendMessage(chatId, "Something went wrong. Please try again.");
+        return;
+    }
+
+    const { action, userId } = session;
+
+    if (action === 'create_account') {
+        const referralCode = await generateUniqueReferralCode();
+        await createUser(userId, text, referralCode);
+        const user = await getUserByTelegramId(userId);
+        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others);
+        delete userSessions[chatId];
+    } else if (action === 'login') {
+        const user = await getUserByTelegramId(userId);
+        if (user && user.password === text) {
+            const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
+            await updateUserBalanceInDB(userId, solanaBalance);
+            await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
+            delete userSessions[chatId];
+        } else {
+            await sendMessage(chatId, "Incorrect password. Please try again.");
+        }
+    }
+}
+
+// Show welcome message after successful login or account creation
+async function showWelcomeMessage(chatId, userId, balance, referralCode) {
+    const message = `Welcome back!\n\nYour balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\nClick and hold on the referral code to copy.`;
+
+    const options = {
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "Add Funds", callback_data: "add_funds" }],
+                [{ text: "Logout", callback_data: "logout" }],
+            ],
+        },
+    };
+
+    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+    });
 }
 
 // Function to send a message via Telegram
