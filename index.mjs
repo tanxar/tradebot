@@ -63,17 +63,18 @@ async function fundNewWallet(newWalletPublicKey) {
             solanaWeb3.SystemProgram.transfer({
                 fromPubkey: myKeypair.publicKey,
                 toPubkey: newWalletPublicKey,
-                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022,
+                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022, // 0.0022 SOL
             })
         );
 
         // Send the transaction
         const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-        console.log(Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature});
+        console.log(`Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature}`);
     } catch (error) {
-        console.error(Error funding new wallet: ${error.message});
+        console.error(`Error funding new wallet: ${error.message}`);
     }
 }
+
 
 // Function to fetch USDT balance or create token account if none exists
 async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
