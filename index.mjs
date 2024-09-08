@@ -75,24 +75,31 @@ async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
     }
 }
 
-// Function to get user's current balance from the database
+// Function to get user's current balance and other relevant data from the database
 async function getUserBalanceFromDB(userId) {
     try {
-        const query = 'SELECT balance FROM users WHERE id = $1';
+        const query = 'SELECT balance, last_checked_balance, total_funds_sent FROM users WHERE id = $1';
         const result = await client.query(query, [userId]);
-        return result.rows.length > 0 ? result.rows[0].balance : 0;
+        if (result.rows.length > 0) {
+            return {
+                balance: result.rows[0].balance,
+                lastCheckedBalance: result.rows[0].last_checked_balance,
+                totalFundsSent: result.rows[0].total_funds_sent,
+            };
+        }
+        return { balance: 0, lastCheckedBalance: 0, totalFundsSent: 0 };
     } catch (error) {
         console.error(`Error fetching user balance from DB: ${error.message}`);
-        return 0;
+        return { balance: 0, lastCheckedBalance: 0, totalFundsSent: 0 };
     }
 }
 
-// Function to update user's balance in the database
-async function updateUserBalanceInDB(userId, newBalance) {
+// Function to update user's balance and last checked balance in the database
+async function updateUserBalanceInDB(userId, newBalance, newTotalFundsSent) {
     try {
-        const query = 'UPDATE users SET balance = $1 WHERE id = $2';
-        await client.query(query, [newBalance, userId]);
-        console.log(`Updated user ${userId}'s balance to ${newBalance}`);
+        const query = 'UPDATE users SET balance = $1, last_checked_balance = $2, total_funds_sent = $3 WHERE id = $4';
+        await client.query(query, [newBalance, newBalance, newTotalFundsSent, userId]);
+        console.log(`Updated user ${userId}'s balance to ${newBalance}, last checked balance, and total funds sent.`);
     } catch (error) {
         console.error(`Error updating user balance in DB: ${error.message}`);
     }
@@ -135,7 +142,7 @@ async function createUser(telegramId, password, referralCode) {
     console.log(`User created with Solana wallet: ${solWalletAddress}`);
 }
 
-// Function to check for funds and avoid redundant notifications
+// Function to check for new funds and avoid redundant notifications
 async function checkForFunds(chatId, userId, messageId) {
     const user = await getUserByTelegramId(userId);
     const solWalletAddress = user.sol_wallet_address;
@@ -143,14 +150,17 @@ async function checkForFunds(chatId, userId, messageId) {
     // Fetch current balance in wallet
     const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(solWalletAddress);
 
-    // Fetch balance from the database
-    const dbBalance = await getUserBalanceFromDB(userId);
+    // Fetch balance, last checked balance, and total funds from the database
+    const { balance: dbBalance, lastCheckedBalance, totalFundsSent } = await getUserBalanceFromDB(userId);
 
-    if (solanaBalance > dbBalance) {
-        const newFunds = solanaBalance - dbBalance;
-        await updateUserBalanceInDB(userId, solanaBalance);
+    if (solanaBalance > lastCheckedBalance) {
+        const newFunds = solanaBalance - lastCheckedBalance;
+        const newTotalFundsSent = totalFundsSent + newFunds;
 
-        const fundsAddedMessage = `Funds Added: ${newFunds} USDT. Restarting bot to update balance...`;
+        // Update the database with the new balance, last checked balance, and total funds sent
+        await updateUserBalanceInDB(userId, solanaBalance, newTotalFundsSent);
+
+        const fundsAddedMessage = `New funds detected: ${newFunds} USDT. Total funds received: ${newTotalFundsSent} USDT.`;
         await sendMessage(chatId, fundsAddedMessage); // Notify user about added funds
 
         // Restart the bot logic from the login phase to show the new balance
