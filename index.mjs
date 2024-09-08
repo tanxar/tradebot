@@ -198,6 +198,14 @@ async function editMessage(chatId, messageId, newText, replyMarkup = null, parse
     });
 }
 
+// Function to ask for a password when creating an account
+async function askForPassword(chatId, userId, action) {
+    userSessions[chatId] = { action, userId };
+    const message = action === 'create_account' ? "Please enter a password to create your account:" : "Please enter your password:";
+    
+    await sendMessage(chatId, message);
+}
+
 // Handle the login button click and ask for password
 async function handleLogin(chatId, userId, messageId) {
     userSessions[chatId] = { action: 'login', userId };
