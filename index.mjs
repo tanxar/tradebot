@@ -58,33 +58,20 @@ async function fundNewWallet(newWalletPublicKey) {
     try {
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
 
-        // Check the balance of the funding wallet
-        const balance = await checkMyKeypairBalance();
-        if (balance < 0.0022) {
-            console.error('Insufficient SOL in funding wallet.');
-            return;
-        }
-
         // Create the transaction to send SOL
         const transaction = new solanaWeb3.Transaction().add(
             solanaWeb3.SystemProgram.transfer({
                 fromPubkey: myKeypair.publicKey,
                 toPubkey: newWalletPublicKey,
-                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022, // 0.0022 SOL
+                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022,
             })
         );
 
         // Send the transaction
         const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-        console.log(`Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature}`);
+        console.log(Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature});
     } catch (error) {
-        if (error instanceof solanaWeb3.SendTransactionError) {
-            console.error('Error funding new wallet: Transaction simulation failed.');
-            const logs = await error.getLogs();  // Retrieve logs for debugging
-            console.error('Logs:', logs);
-        } else {
-            console.error(`Error funding new wallet: ${error.message}`);
-        }
+        console.error(Error funding new wallet: ${error.message});
     }
 }
 
