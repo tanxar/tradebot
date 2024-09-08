@@ -43,7 +43,7 @@ let userSessions = {};
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
 // Your Solana private key (converted from base58)
-const myAccountPrivateKey = bs58.decode('52P39r6ywe5TmjM6aYxx7mYbYrL5ov8pdAW7vvH7dNSF8WSpWr1tVc9hYrtUmjfyJgPEnz5WTYopgicymcSYWTfe');
+const myAccountPrivateKey = bs58.decode('17od4rpGRYLw1XXd84SFtyQ5y6rJtkpab1SAm7XsBxHdj1kVEqw1jVN58bDPPFDB44WjgVCHA3vK3ryLHRUsycu');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 // Function to fetch USDT balance or create token account if none exists
