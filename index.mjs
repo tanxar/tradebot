@@ -56,7 +56,7 @@ async function checkMyKeypairBalance() {
 // Function to fund a newly created wallet
 async function fundNewWallet(newWalletPublicKey) {
     try {
-        const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('devnet'));
+        const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
 
         // Check balance of the funding account
         const balance = await connection.getBalance(myKeypair.publicKey);
