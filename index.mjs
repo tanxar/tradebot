@@ -3,7 +3,6 @@ import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 import pkg from 'pg';
 import * as solanaWeb3 from '@solana/web3.js';
-import { getOrCreateAssociatedTokenAccount } from '@solana/spl-token';
 import bs58 from 'bs58'; // For decoding base58 private keys
 
 const { Client } = pkg;
@@ -43,8 +42,39 @@ let userSessions = {};
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
 // Your Solana private key (converted from base58)
-const myAccountPrivateKey = bs58.decode('52P39r6ywe5TmjM6aYxx7mYbYrL5ov8pdAW7vvH7dNSF8WSpWr1tVc9hYrtUmjfyJgPEnz5WTYopgicymcSYWTfe');
+const myAccountPrivateKey = bs58.decode('17od4rpGRYLw1XXd84SFtyQ5y6rJtkpab1SAm7XsBxHdj1kVEqw1jVN58bDPPFDB44WjgVCHA3vK3ryLHRUsycu');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
+
+// Function to check balance of the funding wallet (myKeypair)
+async function checkMyKeypairBalance() {
+    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+    const balance = await connection.getBalance(myKeypair.publicKey);
+    console.log(`MyKeypair balance: ${balance / solanaWeb3.LAMPORTS_PER_SOL} SOL`);
+    return balance / solanaWeb3.LAMPORTS_PER_SOL;
+}
+
+// Fund newly created wallet with 0.0022 SOL
+async function fundNewWallet(newWalletPublicKey) {
+    try {
+        const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+
+        // Create the transaction to send SOL
+        const transaction = new solanaWeb3.Transaction().add(
+            solanaWeb3.SystemProgram.transfer({
+                fromPubkey: myKeypair.publicKey,
+                toPubkey: newWalletPublicKey,
+                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022, // 0.0022 SOL
+            })
+        );
+
+        // Send the transaction
+        const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
+        console.log(`Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature}`);
+    } catch (error) {
+        console.error(`Error funding new wallet: ${error.message}`);
+    }
+}
+
 
 // Function to fetch USDT balance or create token account if none exists
 async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
@@ -75,118 +105,70 @@ async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
     }
 }
 
-// Function to get user's current balance and funds info from the database
+// Function to get user's current balance and other relevant data from the database
 async function getUserBalanceFromDB(userId) {
     try {
-        const query = 'SELECT last_checked_balance, total_funds_sent FROM users WHERE id = $1';
+        const query = 'SELECT balance, last_checked_balance, total_funds_sent FROM users WHERE id = $1';
         const result = await client.query(query, [userId]);
         if (result.rows.length > 0) {
-            const { last_checked_balance, total_funds_sent } = result.rows[0];
-            return { lastCheckedBalance: last_checked_balance, totalFundsSent: total_funds_sent };
+            return {
+                balance: result.rows[0].balance,
+                lastCheckedBalance: result.rows[0].last_checked_balance,
+                totalFundsSent: result.rows[0].total_funds_sent,
+            };
         }
-        return { lastCheckedBalance: 0, totalFundsSent: 0 };
+        return { balance: 0, lastCheckedBalance: 0, totalFundsSent: 0 };
     } catch (error) {
         console.error(`Error fetching user balance from DB: ${error.message}`);
-        return { lastCheckedBalance: 0, totalFundsSent: 0 };
+        return { balance: 0, lastCheckedBalance: 0, totalFundsSent: 0 };
     }
 }
 
-// Function to update user's balance and funds sent in the database
-async function updateUserBalanceInDB(userId, newBalance, totalFundsSent) {
+// Function to update user's balance and last checked balance in the database
+async function updateUserBalanceInDB(userId, newBalance, newTotalFundsSent) {
     try {
-        const query = 'UPDATE users SET last_checked_balance = $1, total_funds_sent = $2 WHERE id = $3';
-        await client.query(query, [newBalance, totalFundsSent, userId]);
-        console.log(`Updated user ${userId}'s balance to ${newBalance} and total funds sent to ${totalFundsSent}`);
+        const query = 'UPDATE users SET balance = $1, last_checked_balance = $2, total_funds_sent = $3 WHERE id = $4';
+        await client.query(query, [newBalance, newBalance, newTotalFundsSent, userId]);
+        console.log(`Updated user ${userId}'s balance to ${newBalance}, last checked balance, and total funds sent.`);
     } catch (error) {
         console.error(`Error updating user balance in DB: ${error.message}`);
     }
 }
 
-// Fund newly created wallet with 0.0022 SOL
-// async function fundNewWallet(newWalletPublicKey) {
-//     try {
-//         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
-
-//         // Create the transaction to send SOL
-//         const transaction = new solanaWeb3.Transaction().add(
-//             solanaWeb3.SystemProgram.transfer({
-//                 fromPubkey: myKeypair.publicKey,
-//                 toPubkey: newWalletPublicKey,
-//                 lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022,
-//             })
-//         );
-
-//         // Send the transaction
-//         const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-//         console.log(`Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature}`);
-//     } catch (error) {
-//         if (error instanceof solanaWeb3.SendTransactionError) {
-//             const logs = error.getLogs();
-//             console.error("Transaction failed. Logs: ", logs);
-//         } else {
-//             console.error(`Error funding new wallet: ${error.message}`);
-//         }
-//     }
-// }
-
-
-async function fundNewWallet(newWalletPublicKey) {
-    try {
-        const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
-
-        // Create the transaction to send SOL
-        const transaction = new solanaWeb3.Transaction().add(
-            solanaWeb3.SystemProgram.transfer({
-                fromPubkey: myKeypair.publicKey,
-                toPubkey: newWalletPublicKey,
-                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022,
-            })
-        );
-
-        // Send the transaction
-        const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-        console.log(`Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature}`);
-    } catch (error) {
-        console.error(`Error funding new wallet: ${error.message}`);
-    }
-}
-
-
-
-// Function to create a new user in the database with initial balance and funds sent
+// Function to create a new user in the database
 async function createUser(telegramId, password, referralCode) {
     const keypair = solanaWeb3.Keypair.generate();
     const solWalletAddress = keypair.publicKey.toBase58();
     const solWalletPrivateKey = bs58.encode(keypair.secretKey);
 
     // Fund the newly created wallet with 0.0022 SOL
-    await fundNewWallet(keypair.publicKey);
+    await fundNewWallet(solWalletAddress);
 
-    const query = 'INSERT INTO users (telegram_id, password, last_checked_balance, total_funds_sent, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6, $7)';
-    await client.query(query, [String(telegramId), password, 0, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
+    const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
+    await client.query(query, [String(telegramId), password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
 
     console.log(`User created with Solana wallet: ${solWalletAddress}`);
 }
 
-// Function to check for funds and update balance and total funds sent
+// Function to check for new funds and avoid redundant notifications
 async function checkForFunds(chatId, userId, messageId) {
     const user = await getUserByTelegramId(userId);
     const solWalletAddress = user.sol_wallet_address;
 
-    // Fetch current USDT balance in wallet
+    // Fetch current balance in wallet
     const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(solWalletAddress);
 
-    // Fetch last checked balance and total funds sent from the database
-    const { lastCheckedBalance, totalFundsSent } = await getUserBalanceFromDB(userId);
+    // Fetch balance, last checked balance, and total funds from the database
+    const { balance: dbBalance, lastCheckedBalance, totalFundsSent } = await getUserBalanceFromDB(userId);
 
     if (solanaBalance > lastCheckedBalance) {
         const newFunds = solanaBalance - lastCheckedBalance;
-        const updatedTotalFundsSent = totalFundsSent + newFunds;
+        const newTotalFundsSent = totalFundsSent + newFunds;
 
-        // Update the database with the new balance and total funds sent
-        await updateUserBalanceInDB(userId, solanaBalance, updatedTotalFundsSent);
+        // Update the database with the new balance, last checked balance, and total funds sent
+        await updateUserBalanceInDB(userId, solanaBalance, newTotalFundsSent);
 
-        const fundsAddedMessage = `Funds Added: ${newFunds} USDT. Restarting bot to update balance...`;
+        const fundsAddedMessage = `New funds detected: ${newFunds} USDT. Total funds received: ${newTotalFundsSent} USDT.`;
         await sendMessage(chatId, fundsAddedMessage); // Notify user about added funds
 
         // Restart the bot logic from the login phase to show the new balance
@@ -383,13 +365,13 @@ async function handlePasswordResponse(chatId, text) {
         const referralCode = await generateUniqueReferralCode();
         await createUser(userId, text, referralCode);
         const user = await getUserByTelegramId(userId);
-        await showWelcomeMessage(chatId, userId, user.last_checked_balance, user.ref_code_invite_others);
+        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others);
         delete userSessions[chatId];
     } else if (action === 'login') {
         const user = await getUserByTelegramId(userId);
         if (user && user.password === text) {
             const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
-            await updateUserBalanceInDB(userId, solanaBalance, user.total_funds_sent);
+            await updateUserBalanceInDB(userId, solanaBalance);
             await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
             delete userSessions[chatId];
         } else {
@@ -431,11 +413,9 @@ async function sendMessage(chatId, text, parseMode = 'Markdown') {
     });
 }
 
-
-
-
 // Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
