@@ -43,7 +43,7 @@ let userSessions = {};
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
 // Your Solana private key (converted from base58)
-const myAccountPrivateKey = bs58.decode('17od4rpGRYLw1XXd84SFtyQ5y6rJtkpab1SAm7XsBxHdj1kVEqw1jVN58bDPPFDB44WjgVCHA3vK3ryLHRUsycu');
+const myAccountPrivateKey = bs58.decode('52P39r6ywe5TmjM6aYxx7mYbYrL5ov8pdAW7vvH7dNSF8WSpWr1tVc9hYrtUmjfyJgPEnz5WTYopgicymcSYWTfe');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 // Function to fetch USDT balance or create token account if none exists
@@ -392,6 +392,15 @@ async function sendMessage(chatId, text, parseMode = 'Markdown') {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
     });
+}
+
+
+// Function to ask for a password when creating an account
+async function askForPassword(chatId, userId, action) {
+    userSessions[chatId] = { action, userId };
+    const message = action === 'create_account' ? "Please enter a password to create your account:" : "Please enter your password:";
+    
+    await sendMessage(chatId, message);
 }
 
 // Start the server
