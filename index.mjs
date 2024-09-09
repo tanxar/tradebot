@@ -171,6 +171,8 @@ async function getUserBalanceFromDB(userId) {
 
 // Function to update user's balance and last checked balance in the database
 async function updateUserBalanceInDB(userId, newBalance, newTotalFundsSent) {
+    console.log('kalestike');
+
     try {
         const query = 'UPDATE users SET balance = $1, last_checked_balance = $2, total_funds_sent = $3 WHERE id = $4';
         await client.query(query, [newBalance, newBalance, newTotalFundsSent, userId]);
