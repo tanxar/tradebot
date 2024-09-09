@@ -64,7 +64,9 @@ async function fundNewWallet(newWalletPublicKey) {
         console.log(`Funding wallet balance: ${balance} lamports`);
 
         if (balance < solanaWeb3.LAMPORTS_PER_SOL * 0.0022) {
-            throw new Error('Insufficient balance to fund the new wallet.');
+            // throw new Error('Insufficient balance to fund the new wallet.');
+             console.log('WARNING: Insufficient balance to fund the new wallet.');
+
         }
 
         // Get the account info to make sure it's a system account
@@ -162,7 +164,7 @@ async function getUserBalanceFromDB(userId) {
                 totalFundsSent: result.rows[0].total_funds_sent,
             };
         }
-        return { balance: 0, lastCheckedBalance: 0, totalFundsSent: 0 };
+        return { balance: -66, lastCheckedBalance: -66, totalFundsSent: -66 };
     } catch (error) {
         console.error(`Error fetching user balance from DB: ${error.message}`);
         return { balance: 0, lastCheckedBalance: 0, totalFundsSent: 0 };
@@ -427,7 +429,7 @@ async function handlePasswordResponse(chatId, text) {
         const user = await getUserByTelegramId(userId);
         if (user && user.password === text) {
             const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
-            await updateUserBalanceInDB(userId, solanaBalance);
+            // await updateUserBalanceInDB(userId, solanaBalance); 
             await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
             delete userSessions[chatId];
         } else {
@@ -438,7 +440,7 @@ async function handlePasswordResponse(chatId, text) {
 
 // Show welcome message after successful login or account creation
 async function showWelcomeMessage(chatId, userId, balance, referralCode) {
-    const message = `Welcome back!\n\nYour balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\nClick and hold on the referral code to copy.`;
+    const message = `Your balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\nClick the referral code to copy.`;
 
     const options = {
         chat_id: chatId,
@@ -447,7 +449,9 @@ async function showWelcomeMessage(chatId, userId, balance, referralCode) {
         reply_markup: {
             inline_keyboard: [
                 [{ text: "Add Funds", callback_data: "add_funds" }],
-                [{ text: "Logout", callback_data: "logout" }],
+                [{ text: "Withdraw", callback_data: "withdraw" }],
+                [{ text: 'Referrals', callback_data: 'referrals' },
+                { text: 'Logout', callback_data: 'logout' }],
             ],
         },
     };
