@@ -448,7 +448,7 @@ async function showWelcomeMessage(chatId, userId, balance, referralCode) {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: [
-                [{ text: "Add Funds", callback_data: "add_funds" }],
+                [{ text: "➕ Add Funds", callback_data: "add_funds" }],
                 [{ text: "Withdraw", callback_data: "withdraw" }],
                 [{ text: 'Referrals', callback_data: 'referrals' },
                 { text: 'Logout', callback_data: 'logout' }],
