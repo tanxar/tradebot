@@ -67,13 +67,21 @@ async function fundNewWallet(newWalletPublicKey) {
         }
 
         // Create the transaction to send SOL
-        const transaction = new solanaWeb3.Transaction().add(
-            solanaWeb3.SystemProgram.transfer({
-                fromPubkey: myKeypair.publicKey,
-                toPubkey: newWalletPublicKey,
-                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022, // Convert SOL to lamports
-            })
-        );
+        const transaction = new solanaWeb3.Transaction()
+            .add(
+                solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: myKeypair.publicKey,
+                    toPubkey: newWalletPublicKey,
+                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022, // Convert SOL to lamports
+                })
+            );
+
+        // Set the fee payer
+        transaction.feePayer = myKeypair.publicKey;
+
+        // Get the latest blockhash to ensure the transaction is valid
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
 
         // Simulate the transaction before sending
         const simulationResult = await connection.simulateTransaction(transaction);
@@ -83,7 +91,7 @@ async function fundNewWallet(newWalletPublicKey) {
             throw new Error('Transaction simulation failed');
         }
 
-        // Send the transaction and confirm it
+        // Sign and send the transaction
         const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
 
         console.log(`Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature}`);
@@ -97,6 +105,7 @@ async function fundNewWallet(newWalletPublicKey) {
         }
     }
 }
+
 
 
 
