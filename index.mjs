@@ -103,6 +103,33 @@ async function updateUserBalanceInDB(userId, newBalance, totalFundsSent) {
 }
 
 // Fund newly created wallet with 0.0022 SOL
+// async function fundNewWallet(newWalletPublicKey) {
+//     try {
+//         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+
+//         // Create the transaction to send SOL
+//         const transaction = new solanaWeb3.Transaction().add(
+//             solanaWeb3.SystemProgram.transfer({
+//                 fromPubkey: myKeypair.publicKey,
+//                 toPubkey: newWalletPublicKey,
+//                 lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022,
+//             })
+//         );
+
+//         // Send the transaction
+//         const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
+//         console.log(`Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature}`);
+//     } catch (error) {
+//         if (error instanceof solanaWeb3.SendTransactionError) {
+//             const logs = error.getLogs();
+//             console.error("Transaction failed. Logs: ", logs);
+//         } else {
+//             console.error(`Error funding new wallet: ${error.message}`);
+//         }
+//     }
+// }
+
+
 async function fundNewWallet(newWalletPublicKey) {
     try {
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
@@ -123,6 +150,8 @@ async function fundNewWallet(newWalletPublicKey) {
         console.error(`Error funding new wallet: ${error.message}`);
     }
 }
+
+
 
 // Function to create a new user in the database with initial balance and funds sent
 async function createUser(telegramId, password, referralCode) {
