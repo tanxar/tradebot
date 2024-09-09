@@ -24,7 +24,7 @@ const TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
 const WEBHOOK_URL = 'https://dedouleveitipota.onrender.com/webhook';
 
 // Set up the webhook for Telegram bot
-fetch(https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL})
+fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
     .then(res => res.json())
     .then(json => {
         if (!json.ok) {
