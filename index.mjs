@@ -58,7 +58,7 @@ async function fundNewWallet(newWalletPublicKey) {
     try {
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
 
-        // Check balance of the funding account
+        // Check balance of the Phantom wallet (myKeypair)
         const balance = await connection.getBalance(myKeypair.publicKey);
         console.log(`Funding wallet balance: ${balance} lamports`);
 
@@ -66,17 +66,25 @@ async function fundNewWallet(newWalletPublicKey) {
             throw new Error('Insufficient balance to fund the new wallet.');
         }
 
+        // Get the account info to make sure it's a system account
+        const fromAccountInfo = await connection.getAccountInfo(myKeypair.publicKey);
+        
+        // If the account contains any data, it's likely not a system (SOL) account
+        if (fromAccountInfo && fromAccountInfo.data.length > 0) {
+            throw new Error('From account must be a native SOL account and must not carry any data.');
+        }
+
         // Create the transaction to send SOL
         const transaction = new solanaWeb3.Transaction()
             .add(
                 solanaWeb3.SystemProgram.transfer({
-                    fromPubkey: myKeypair.publicKey,
-                    toPubkey: newWalletPublicKey,
+                    fromPubkey: myKeypair.publicKey, // This should be the Phantom wallet public key
+                    toPubkey: newWalletPublicKey, // The new wallet being funded
                     lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022, // Convert SOL to lamports
                 })
             );
 
-        // Set the fee payer
+        // Set the fee payer (usually the from account)
         transaction.feePayer = myKeypair.publicKey;
 
         // Get the latest blockhash to ensure the transaction is valid
@@ -91,7 +99,7 @@ async function fundNewWallet(newWalletPublicKey) {
             throw new Error('Transaction simulation failed');
         }
 
-        // Sign and send the transaction
+        // Send the transaction and confirm it
         const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
 
         console.log(`Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature}`);
@@ -105,6 +113,7 @@ async function fundNewWallet(newWalletPublicKey) {
         }
     }
 }
+
 
 
 
