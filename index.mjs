@@ -42,7 +42,8 @@ let userSessions = {};
 const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
 // Your Solana private key (converted from base58)
-const myAccountPrivateKey = bs58.decode('17od4rpGRYLw1XXd84SFtyQ5y6rJtkpab1SAm7XsBxHdj1kVEqw1jVN58bDPPFDB44WjgVCHA3vK3ryLHRUsycu');
+// MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
+const myAccountPrivateKey = bs58.decode('2E7FiSKexec7hLBMCqfqum2KEhWLinkzD13wizK1ybV1A1g4ppzQWd6B8xcgcx7ckid16FXj9s5r2qdcdaMHDRjQ');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 // Function to check balance of the funding wallet (myKeypair)
