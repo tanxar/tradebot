@@ -334,6 +334,16 @@ app.post('/webhook', async (req, res) => {
             console.log(`Check for Payment button clicked by user ${userId}`);
             await checkForFunds(chatId, userId, messageId);
         }
+          else if (data === 'withdraw') {
+            console.log(`Withdraw button clicked by user ${userId}`);
+            await handleWithdraw(chatId, userId, messageId);
+        } else if (data === 'confirm_withdraw') {
+            console.log(`Confirm withdraw clicked by user ${userId}`);
+            await handleConfirmWithdraw(chatId);
+        } else if (data === 'cancel_withdraw') {
+            console.log(`Cancel withdraw clicked by user ${userId}`);
+            await handleCancelWithdraw(chatId);
+        }
     }
 
     if (message) {
@@ -346,6 +356,12 @@ app.post('/webhook', async (req, res) => {
             await showInitialOptions(chatId, userId, firstName);
         } else if (userSessions[chatId] && (userSessions[chatId].action === 'create_account' || userSessions[chatId].action === 'login')) {
             await handlePasswordResponse(chatId, text);
+        }
+        else if (userSessions[chatId] && userSessions[chatId].action === 'enter_withdraw_amount') {
+            await handleWithdrawAmount(chatId, message.message_id, text); // Pass messageId to edit message
+        }
+         else if (userSessions[chatId] && userSessions[chatId].action === 'enter_withdraw_address') {
+            await handleWithdrawAddress(chatId, message.message_id, text); // Pass messageId to edit message
         }
     }
 
@@ -472,6 +488,89 @@ async function sendMessage(chatId, text, parseMode = 'Markdown') {
         body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
     });
 }
+
+
+// newwww
+// Function to handle the "Withdraw" button click
+async function handleWithdraw(chatId, userId, messageId) {
+    userSessions[chatId] = { action: 'enter_withdraw_amount', userId };
+    const message = "Please enter the amount to withdraw (USDT):";
+    
+    // Edit the message to ask for the amount
+    await editMessage(chatId, messageId, message);
+}
+// Function to handle user entering the withdrawal amount
+async function handleWithdrawAmount(chatId, messageId, amount) {
+    const session = userSessions[chatId];
+
+    if (!session || session.action !== 'enter_withdraw_amount') {
+        await sendMessage(chatId, "Something went wrong. Please try again.");
+        return;
+    }
+
+    // Store the entered amount in the session
+    session.withdrawAmount = amount;
+    session.action = 'enter_withdraw_address';
+
+    const message = "Please enter the wallet address to withdraw to:";
+    
+    // Edit the previous message to ask for the wallet address
+    await editMessage(chatId, messageId, message);
+}
+
+
+
+// Function to handle user entering the wallet address
+async function handleWithdrawAddress(chatId, messageId, address) {
+    const session = userSessions[chatId];
+
+    if (!session || session.action !== 'enter_withdraw_address') {
+        await sendMessage(chatId, "Something went wrong. Please try again.");
+        return;
+    }
+
+    // Store the wallet address in the session
+    session.withdrawAddress = address;
+
+    // Prepare the confirmation message
+    const message = `Withdraw confirmation\n\nWithdraw amount: ${session.withdrawAmount} USDT\nTo wallet: ${session.withdrawAddress}`;
+    
+    // Add inline keyboard with "Confirm" and "Cancel" buttons
+    const replyMarkup = {
+        inline_keyboard: [
+            [{ text: 'Confirm', callback_data: 'confirm_withdraw' }],
+            [{ text: 'Cancel', callback_data: 'cancel_withdraw' }],
+        ],
+    };
+
+    // Edit the message to show confirmation with the buttons
+    await editMessage(chatId, messageId, message, replyMarkup);
+}
+
+
+// Function to handle withdrawal confirmation
+async function handleConfirmWithdraw(chatId) {
+    const session = userSessions[chatId];
+
+    if (!session || !session.withdrawAmount || !session.withdrawAddress) {
+        await sendMessage(chatId, "Something went wrong. Please try again.");
+        return;
+    }
+
+    // Proceed with the withdrawal logic here (e.g., interacting with the blockchain)
+    await sendMessage(chatId, `Withdrawal of ${session.withdrawAmount} USDT to ${session.withdrawAddress} confirmed.`);
+
+    // Clear the session
+    delete userSessions[chatId];
+}
+
+// Function to handle withdrawal cancellation
+async function handleCancelWithdraw(chatId) {
+    await sendMessage(chatId, "Withdrawal cancelled.");
+    // Clear the session
+    delete userSessions[chatId];
+}
+
 
 // Start the server
 const PORT = process.env.PORT || 3000;
