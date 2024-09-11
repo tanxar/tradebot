@@ -609,27 +609,64 @@ async function sendMessage(chatId, text, parseMode = 'Markdown') {
 
 
 //new
-// withdraw func
-// Function to handle the initiation of withdrawal
-async function handleWithdraw(chatId, userId, messageId) {
-    // Fetch the user's balance from the database
-    const query = 'SELECT balance FROM users WHERE telegram_id = $1';
-    const result = await client.query(query, [String(userId)]);
-    
-    let balance = 0; // Default balance
-    if (result.rows.length > 0) {
-        balance = result.rows[0].balance;
+// Function to handle user entering the withdrawal amount
+async function handleWithdrawAmount(chatId, messageId, amount) {
+    const session = userSessions[chatId];
+
+    // Log the session state for debugging
+    console.log("Session state:", session);
+
+    // Ensure the session is properly set
+    if (!session || session.action !== 'enter_withdraw_amount') {
+        console.log("Session not found or incorrect action.");
+        await sendMessage(chatId, "Something went wrong. Please try again.");
+        return;
     }
 
-    // Store the user's action in session
-    userSessions[chatId] = { action: 'enter_withdraw_amount', userId };
+    // Log the entered amount for debugging
+    console.log("Entered withdrawal amount:", amount);
 
-    // Ask the user to enter the withdrawal amount
-    const message = `Your balance: ${balance} USDT\nPlease enter the amount to withdraw:`;
+    // Fetch the user's balance from the session or database
+    const userBalance = session.userBalance || await getUserBalanceFromDB(session.userId);
 
-    // Edit the message to show the withdrawal prompt
-    await editMessage(chatId, messageId, message);
+    // Validate if the amount is a valid number
+    const withdrawAmount = parseFloat(amount);
+    if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
+        console.log("Invalid amount entered:", amount);
+        await sendMessage(chatId, "Invalid amount entered. Please enter a valid number greater than 0.");
+        return;
+    }
+
+    // Log the user's balance for debugging
+    console.log(`User's balance: ${userBalance} USDT`);
+
+    // Check if the entered amount exceeds the user's balance
+    if (withdrawAmount > userBalance) {
+        console.log("Withdrawal amount exceeds the balance.");
+        await sendMessage(chatId, `Insufficient balance. You tried to withdraw ${withdrawAmount} USDT, but your current balance is ${userBalance} USDT. Please enter a valid amount.`);
+        return;
+    }
+
+    // Store the entered amount in the session and move to the next step
+    session.withdrawAmount = withdrawAmount;
+    session.action = 'enter_withdraw_address';
+
+    // Ask the user to provide the wallet address
+    const message = "Please enter the wallet address to withdraw to:";
+    
+    // Log the action of requesting the wallet address
+    console.log("Requesting wallet address from user.");
+
+    // Try to edit the message and catch any errors
+    try {
+        await editMessage(chatId, messageId, message);
+        console.log("Message successfully edited to request wallet address.");
+    } catch (error) {
+        console.error("Error editing message:", error);
+        await sendMessage(chatId, "An error occurred while processing your request. Please try again.");
+    }
 }
+
 
 
 
