@@ -639,7 +639,7 @@ async function handleWithdrawResponse(chatId, text) {
     if (step === 'enter_amount') {
         const amount = parseFloat(text);
 
-        if (isNaN(amount) || amount <= 0) {
+        if (isNaN(amount) || amount <= 0 || amount > balance) {
             await sendMessage(chatId, "Please enter a valid withdrawal amount.");
             return;
         }
@@ -676,7 +676,7 @@ async function handleWithdrawResponse(chatId, text) {
             };
 
             console.log("Asking for confirmation.");
-            await sendMessage(chatId, message, replyMarkup);
+            await sendMessage(chatId, message);
 
         } catch (error) {
             console.error(`Invalid wallet address entered: ${text}`);
