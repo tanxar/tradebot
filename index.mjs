@@ -262,14 +262,16 @@ async function checkForFunds(chatId, userId, messageId) {
             await client.query(updateQuery, [updatedBalance, newCheckedBalance, solanaBalance, userId]);
 
             // Notify the user of the new funds detected
-            const fundsAddedMessage = `New funds detected: ${newFunds} USDT. Total balance: ${updatedBalance} USDT.`;
+            const fundsAddedMessage = `New funds detected: ${newFunds} USDT. \n Restarting bot...`;
             await sendMessage(chatId, fundsAddedMessage);
 
             // Restart the bot to reflect the new balance in the database
-            await restartBotAfterFundsAdded(chatId, userId);
+            await restartBot(chatId, userId);
         } else {
             // No new funds detected
-            await sendMessage(chatId, "No new funds detected.");
+            await sendMessage(chatId, "No new funds detected. \n Restarting bot...");
+            await restartBot(chatId, userId);
+
         }
     } catch (error) {
         console.error(`Error checking for funds: ${error.message}`);
@@ -281,7 +283,7 @@ async function checkForFunds(chatId, userId, messageId) {
 
 
 // Function to restart the bot after funds are detected
-async function restartBotAfterFundsAdded(chatId, userId) {
+async function restartBot(chatId, userId) {
     try {
         // Fetch the user data from the database
         const user = await getUserByTelegramId(userId);
