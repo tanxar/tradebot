@@ -675,7 +675,7 @@ async function handleWithdrawResponse(chatId, text) {
             const { withdrawAmount } = userSessions[chatId];
             const message = `Confirm Withdrawal:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress.toBase58()}\n\nClick confirm to proceed or cancel to abort.`;
 
-            const replyMarkup = {
+            const papardela = {
                 inline_keyboard: [
                     [{ text: '✅ Confirm', callback_data: 'confirm_withdrawal' }],
                     [{ text: '❌ Cancel', callback_data: 'cancel_withdrawal' }]
@@ -683,7 +683,7 @@ async function handleWithdrawResponse(chatId, text) {
             };
 
             console.log("Asking for confirmation.");
-            await sendMessage(chatId, message, { reply_markup: replyMarkup });
+            await sendMessage(chatId, message, papardela);
         } catch (error) {
             console.error(`Invalid wallet address entered: ${text}`);
             await sendMessage(chatId, "Please enter a valid Solana wallet address.");
