@@ -228,32 +228,34 @@ async function checkForFunds(chatId, userId, messageId) {
     const { balance: dbBalance, lastCheckedBalance, totalFundsSent } = await getUserBalanceFromDB(userId);
     console.log(`DB balance: ${dbBalance}, Last checked balance: ${lastCheckedBalance}`);
 
+    // Detect if new funds have been received
     if (solanaBalance > lastCheckedBalance) {
         // Calculate the new funds received
         const newFunds = solanaBalance - lastCheckedBalance;
         console.log(`New funds detected: ${newFunds} USDT`);
 
-        // Add new funds to the existing balance
+        // Add new funds to the existing balance from the database
         const updatedBalance = dbBalance + newFunds;
         console.log(`Updated balance: ${updatedBalance} USDT`);
 
-        // The last_checked_balance should now be the current wallet balance
+        // Update the database with the new balance and set lastCheckedBalance to the current wallet balance
         const newCheckedBalance = solanaBalance;
 
-        // Update the database with the new balance, new last_checked_balance, and total funds sent
-        await updateUserBalanceInDB(userId, updatedBalance, newCheckedBalance, newCheckedBalance);
+        // Ensure the database is updated with the correct new balance and new last_checked_balance
+        await updateUserBalanceInDB(userId, updatedBalance, newCheckedBalance, solanaBalance);
 
         // Notify the user of the new funds detected
         const fundsAddedMessage = `New funds detected: ${newFunds} USDT. Total balance: ${updatedBalance} USDT.`;
         await sendMessage(chatId, fundsAddedMessage);
 
-        // Restart the bot to reflect the new balance
+        // Restart the bot to reflect the new balance in the database
         await restartBotAfterFundsAdded(chatId, userId);
     } else {
         // No new funds detected
         await sendMessage(chatId, "No new funds detected. Please try again later.");
     }
 }
+
 
 
 // Function to restart the bot after funds are detected
