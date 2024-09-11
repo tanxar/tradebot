@@ -216,6 +216,8 @@ async function createUser(telegramId, password, referralCode) {
 
 
 // Function to check for new funds and avoid redundant notifications
+// Function to check for new funds and avoid redundant notifications
+// Function to check for new funds and avoid redundant notifications
 async function checkForFunds(chatId, userId, messageId) {
     try {
         const user = await getUserByTelegramId(userId);
@@ -231,7 +233,7 @@ async function checkForFunds(chatId, userId, messageId) {
 
         // Check if a user record was found
         if (result.rows.length === 0) {
-            await sendMessage(chatId, "User not found in the database.");
+            await editMessage(chatId, messageId, "User not found in the database.");
             return;
         }
 
@@ -261,23 +263,36 @@ async function checkForFunds(chatId, userId, messageId) {
             `;
             await client.query(updateQuery, [updatedBalance, newCheckedBalance, solanaBalance, userId]);
 
-            // Notify the user of the new funds detected
-            const fundsAddedMessage = `New funds detected: ${newFunds} USDT. \n Restarting bot...`;
-            await sendMessage(chatId, fundsAddedMessage);
+            // Notify the user by editing the existing message
+            const fundsAddedMessage = `New funds detected: ${newFunds} USDT.`;
+            await editMessage(chatId, messageId, fundsAddedMessage);
 
-            // Restart the bot to reflect the new balance in the database
-            await restartBot(chatId, userId);
+            // Wait for 1 second, then edit the message to "Restarting bot..."
+            setTimeout(async () => {
+                const restartingMessage = "Restarting bot...";
+                await editMessage(chatId, messageId, restartingMessage);
+                await restartBot(chatId, userId); // Optional: Restart the bot after editing the message
+            }, 1000); // 1000 milliseconds = 1 second
+
         } else {
-            // No new funds detected
-            await sendMessage(chatId, "No new funds detected. \n Restarting bot...");
-            await restartBot(chatId, userId);
+            // No new funds detected, edit the message to notify the user
+            const noFundsMessage = "No new funds detected.";
+            await editMessage(chatId, messageId, noFundsMessage);
 
+            // Wait for 1 second, then edit the message to "Restarting bot..."
+            setTimeout(async () => {
+                const restartingMessage = "Restarting bot...";
+                await editMessage(chatId, messageId, restartingMessage);
+                await restartBot(chatId, userId); // Optional: Restart the bot after editing the message
+            }, 1000); // 1000 milliseconds = 1 second
         }
     } catch (error) {
         console.error(`Error checking for funds: ${error.message}`);
-        await sendMessage(chatId, "An error occurred while checking for new funds. Please try again.");
+        await editMessage(chatId, messageId, "An error occurred while checking for new funds. Please try again.");
     }
 }
+
+
 
 
 
