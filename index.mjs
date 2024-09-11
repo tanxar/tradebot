@@ -596,8 +596,15 @@ async function showWelcomeMessage(chatId, userId, referralCode) {
 
 // Function to handle the withdraw button click
 async function handleWithdraw(chatId, userId, messageId) {
-    // Fetch the user's balance
-    const { balance } = await getUserBalanceFromDB(userId);
+        // Query to get the user's balance from the database
+        const query = 'SELECT balance FROM users WHERE telegram_id = $1';
+        const result = await client.query(query, [String(userId)]);
+        
+        let balance = 0; // Default balance
+        if (result.rows.length > 0) {
+            balance = result.rows[0].balance;
+        }
+
 
     // Set user session to track withdrawal process
     userSessions[chatId] = {
@@ -607,7 +614,7 @@ async function handleWithdraw(chatId, userId, messageId) {
     };
 
     // Ask the user to enter the withdrawal amount
-    const message = `Your balance: ${balance} USDT\nPlease enter the amount you would like to withdraw:`;
+    const message = `Your balance: ${balance} USDT\nEnter withdraw amount:`;
     await editMessage(chatId, messageId, message);
 }
 
@@ -631,7 +638,7 @@ async function handleWithdrawResponse(chatId, text) {
             return;
         }
 
-        // Update session with amount and move to next step
+        // Update session with amount and move to the next step
         userSessions[chatId].withdrawAmount = amount;
         userSessions[chatId].step = 'enter_wallet_address';
 
@@ -641,32 +648,33 @@ async function handleWithdrawResponse(chatId, text) {
 
     // Step 2: Enter Wallet Address
     else if (step === 'enter_wallet_address') {
-        const walletAddress = text;
+        try {
+            // Create a PublicKey instance to validate the address
+            const walletAddress = new solanaWeb3.PublicKey(text);
 
-        // Basic validation to check if the wallet address is valid
-        if (!solanaWeb3.PublicKey.isOnCurve(walletAddress)) {
+            // If no error is thrown, the wallet address is valid
+            userSessions[chatId].walletAddress = walletAddress.toBase58();
+            userSessions[chatId].step = 'confirm_withdrawal';
+
+            // Display confirmation message
+            const { withdrawAmount } = userSessions[chatId];
+            const message = `Confirm Withdrawal:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress.toBase58()}\n\nClick confirm to proceed or cancel to abort.`;
+
+            const replyMarkup = {
+                inline_keyboard: [
+                    [{ text: '✅ Confirm', callback_data: 'confirm_withdrawal' }],
+                    [{ text: '❌ Cancel', callback_data: 'cancel_withdrawal' }]
+                ]
+            };
+
+            await sendMessage(chatId, message, replyMarkup);
+
+        } catch (error) {
             await sendMessage(chatId, "Please enter a valid Solana wallet address.");
-            return;
         }
-
-        // Update session with wallet address and move to confirmation step
-        userSessions[chatId].walletAddress = walletAddress;
-        userSessions[chatId].step = 'confirm_withdrawal';
-
-        // Display confirmation message
-        const { withdrawAmount } = userSessions[chatId];
-        const message = `Confirm Withdrawal:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress}\n\nClick confirm to proceed or cancel to abort.`;
-
-        const replyMarkup = {
-            inline_keyboard: [
-                [{ text: '✅ Confirm', callback_data: 'confirm_withdrawal' }],
-                [{ text: '❌ Cancel', callback_data: 'cancel_withdrawal' }]
-            ]
-        };
-
-        await sendMessage(chatId, message, replyMarkup);
     }
 }
+
 
 // Function to handle withdrawal confirmation or cancellation
 async function handleWithdrawConfirmation(chatId, userId, action) {
