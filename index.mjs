@@ -439,14 +439,14 @@ async function handlePasswordResponse(chatId, text) {
         const referralCode = await generateUniqueReferralCode();
         await createUser(userId, text, referralCode);
         const user = await getUserByTelegramId(userId);
-        await showWelcomeMessage(chatId, userId, user.balance, user.ref_code_invite_others);
+        await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
         delete userSessions[chatId];
     } else if (action === 'login') {
         const user = await getUserByTelegramId(userId);
         if (user && user.password === text) {
             const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
             // await updateUserBalanceInDB(userId, solanaBalance); 
-            await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
+            await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
             delete userSessions[chatId];
         } else {
             await sendMessage(chatId, "Incorrect password. Please try again.");
