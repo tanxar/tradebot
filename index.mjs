@@ -683,8 +683,7 @@ async function handleWithdrawResponse(chatId, text) {
             };
 
             console.log("Asking for confirmation.");
-            await sendMessage(chatId, message);
-
+            await sendMessage(chatId, message, { reply_markup: replyMarkup });
         } catch (error) {
             console.error(`Invalid wallet address entered: ${text}`);
             await sendMessage(chatId, "Please enter a valid Solana wallet address.");
@@ -727,14 +726,45 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
 }
 
 // Function to send a message via Telegram
-async function sendMessage(chatId, text, parseMode = 'Markdown') {
+async function sendMessage(chatId, text, replyMarkup = null, parseMode = 'Markdown') {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
-    });
+
+    const body = {
+        chat_id: chatId,
+        text: text,
+        parse_mode: parseMode
+    };
+
+    // Add replyMarkup to the body if it's provided
+    if (replyMarkup) {
+        body.reply_markup = replyMarkup;
+    }
+
+    console.log(`Sending message to chatId: ${chatId} with text: "${text}"`);
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        const json = await response.json(); // Parse response from Telegram API
+
+        // Log the Telegram API response
+        console.log('Telegram API response:', json);
+
+        // Check if the response is not ok and log the error description
+        if (!json.ok) {
+            console.error(`Failed to send message: ${json.description}`);
+        }
+
+    } catch (error) {
+        console.error(`Error sending message: ${error.message}`);
+    }
 }
+
+
 
 
 // Start the server
