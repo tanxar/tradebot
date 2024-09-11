@@ -606,15 +606,32 @@ async function sendMessage(chatId, text, parseMode = 'Markdown') {
 }
 
 
-// newwww
-// Function to handle the "Withdraw" button click
+//new
+// withdraw func
 async function handleWithdraw(chatId, userId, messageId) {
-    userSessions[chatId] = { action: 'enter_withdraw_amount', userId };
-    const message = "Please enter the amount to withdraw (USDT):";
+    // Fetch the user's balance from the database
+    const query = 'SELECT balance FROM users WHERE telegram_id = $1';
+    const result = await client.query(query, [String(userId)]);
     
-    // Edit the message to ask for the amount
+    let balance = 0; // Default balance
+    if (result.rows.length > 0) {
+        balance = result.rows[0].balance;
+    }
+
+    // Store the user's action in session
+    userSessions[chatId] = { action: 'enter_withdraw_amount', userId };
+
+    // Create the message including the user's balance
+    const message = `Your balance: ${balance} USDT\nEnter amount to withdraw`;
+
+    // Edit the previous message to display the withdrawal prompt with balance
     await editMessage(chatId, messageId, message);
 }
+
+
+
+
+
 // Function to handle user entering the withdrawal amount
 async function handleWithdrawAmount(chatId, messageId, amount) {
     const session = userSessions[chatId];
