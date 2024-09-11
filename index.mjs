@@ -635,6 +635,13 @@ async function handleWithdrawResponse(chatId, text) {
     const { userId, step } = session;
     console.log(`Current step: ${step}`);
 
+    const query = 'SELECT balance FROM users WHERE telegram_id = $1';
+    const result = await client.query(query, [String(userId)]);
+    
+    let balance = 0; // Default balance
+    if (result.rows.length > 0) {
+        balance = result.rows[0].balance;
+    }
     // Step 1: Enter Withdrawal Amount
     if (step === 'enter_amount') {
         const amount = parseFloat(text);
@@ -718,18 +725,6 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         await restartBot(chatId, userId);
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Function to send a message via Telegram
 async function sendMessage(chatId, text, parseMode = 'Markdown') {
