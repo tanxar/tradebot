@@ -166,7 +166,7 @@ async function getUserBalanceFromDB(userId) {
                 totalFundsSent: result.rows[0].total_funds_sent,
             };
         }
-        return { balance: -66, lastCheckedBalance: -66, totalFundsSent: -66 };
+        return { balance: 0, lastCheckedBalance: 0, totalFundsSent: 0 };
     } catch (error) {
         console.error(`Error fetching user balance from DB: ${error.message}`);
         return { balance: 0, lastCheckedBalance: 0, totalFundsSent: 0 };
@@ -256,14 +256,6 @@ async function checkForFunds(chatId, userId, messageId) {
 }
 
 
-
-
-
-
-
-
-
-// Function to restart the bot after funds are detected
 // Function to restart the bot after funds are detected
 async function restartBotAfterFundsAdded(chatId, userId) {
     try {
@@ -277,7 +269,7 @@ async function restartBotAfterFundsAdded(chatId, userId) {
         const referralCode = user.ref_code_invite_others || 'N/A';
 
         // Show the welcome message with the balance from the database
-        await showWelcomeMessage(chatId, userId, dbBalance, referralCode);
+        await showWelcomeMessage(chatId, userId, referralCode);
     } catch (error) {
         console.error(`Error restarting bot after funds added: ${error.message}`);
         await sendMessage(chatId, "An error occurred while updating your balance. Please try again.");
