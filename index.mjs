@@ -218,6 +218,7 @@ async function createUser(telegramId, password, referralCode) {
 // Function to check for new funds and avoid redundant notifications
 // Function to check for new funds and avoid redundant notifications
 // Function to check for new funds and avoid redundant notifications
+// Function to check for new funds and avoid redundant notifications
 async function checkForFunds(chatId, userId, messageId) {
     try {
         const user = await getUserByTelegramId(userId);
@@ -271,7 +272,11 @@ async function checkForFunds(chatId, userId, messageId) {
             setTimeout(async () => {
                 const restartingMessage = "Restarting bot...";
                 await editMessage(chatId, messageId, restartingMessage);
-                await restartBot(chatId, userId); // Optional: Restart the bot after editing the message
+
+                // Wait another second and then show the welcome message
+                setTimeout(async () => {
+                    await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
+                }, 1000); // 1000 milliseconds = 1 second
             }, 1000); // 1000 milliseconds = 1 second
 
         } else {
@@ -283,7 +288,11 @@ async function checkForFunds(chatId, userId, messageId) {
             setTimeout(async () => {
                 const restartingMessage = "Restarting bot...";
                 await editMessage(chatId, messageId, restartingMessage);
-                await restartBot(chatId, userId); // Optional: Restart the bot after editing the message
+
+                // Wait another second and then show the welcome message
+                setTimeout(async () => {
+                    await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
+                }, 1000); // 1000 milliseconds = 1 second
             }, 1000); // 1000 milliseconds = 1 second
         }
     } catch (error) {
@@ -291,6 +300,7 @@ async function checkForFunds(chatId, userId, messageId) {
         await editMessage(chatId, messageId, "An error occurred while checking for new funds. Please try again.");
     }
 }
+
 
 
 
