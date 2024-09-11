@@ -454,6 +454,7 @@ app.post('/webhook', async (req, res) => {
             const firstName = message.from.first_name;
             await showInitialOptions(chatId, userId, firstName);
         } else if (userSessions[chatId] && userSessions[chatId].action === 'withdraw') {
+            // Check if user is in the middle of the withdraw process
             await handleWithdrawResponse(chatId, text);
         } else if (userSessions[chatId] && (userSessions[chatId].action === 'create_account' || userSessions[chatId].action === 'login')) {
             await handlePasswordResponse(chatId, text);
@@ -462,6 +463,7 @@ app.post('/webhook', async (req, res) => {
 
     res.sendStatus(200);
 });
+
 
 
 
@@ -620,14 +622,18 @@ async function handleWithdraw(chatId, userId, messageId) {
 
 // Function to handle user response during the withdrawal process
 async function handleWithdrawResponse(chatId, text) {
+    console.log(`Handling withdraw response for chatId: ${chatId}, text: ${text}`);
+
     const session = userSessions[chatId];
 
     if (!session || session.action !== 'withdraw') {
+        console.log("Session not found or action is not withdraw.");
         await sendMessage(chatId, "Something went wrong. Please try again.");
         return;
     }
 
     const { userId, step } = session;
+    console.log(`Current step: ${step}`);
 
     // Step 1: Enter Withdrawal Amount
     if (step === 'enter_amount') {
@@ -643,12 +649,14 @@ async function handleWithdrawResponse(chatId, text) {
         userSessions[chatId].step = 'enter_wallet_address';
 
         // Ask the user to enter the wallet address
+        console.log(`Amount entered: ${amount}. Asking for wallet address.`);
         await sendMessage(chatId, "Please enter the wallet address to receive the USDT:");
     }
 
     // Step 2: Enter Wallet Address
     else if (step === 'enter_wallet_address') {
         try {
+            console.log(`Validating wallet address: ${text}`);
             // Create a PublicKey instance to validate the address
             const walletAddress = new solanaWeb3.PublicKey(text);
 
@@ -667,13 +675,16 @@ async function handleWithdrawResponse(chatId, text) {
                 ]
             };
 
+            console.log("Asking for confirmation.");
             await sendMessage(chatId, message, replyMarkup);
 
         } catch (error) {
+            console.error(`Invalid wallet address entered: ${text}`);
             await sendMessage(chatId, "Please enter a valid Solana wallet address.");
         }
     }
 }
+
 
 
 // Function to handle withdrawal confirmation or cancellation
