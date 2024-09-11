@@ -633,23 +633,34 @@ async function handleWithdraw(chatId, userId, messageId) {
 
 
 // Function to handle user entering the withdrawal amount
+// Function to handle user entering the withdrawal amount
 async function handleWithdrawAmount(chatId, messageId, amount) {
     const session = userSessions[chatId];
 
+    // Ensure the session is properly set
     if (!session || session.action !== 'enter_withdraw_amount') {
         await sendMessage(chatId, "Something went wrong. Please try again.");
         return;
     }
 
-    // Store the entered amount in the session
-    session.withdrawAmount = amount;
-    session.action = 'enter_withdraw_address';
+    // Check if the amount is a valid number
+    const withdrawAmount = parseFloat(amount);
+    if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
+        await sendMessage(chatId, "Invalid amount entered. Please enter a valid number.");
+        return;
+    }
 
+    // Store the entered amount in the session
+    session.withdrawAmount = withdrawAmount;
+    session.action = 'enter_withdraw_address'; // Transition to the next step
+
+    // Prompt the user to enter the wallet address
     const message = "Please enter the wallet address to withdraw to:";
     
     // Edit the previous message to ask for the wallet address
     await editMessage(chatId, messageId, message);
 }
+
 
 
 
