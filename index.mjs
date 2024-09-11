@@ -212,12 +212,23 @@ async function createUser(telegramId, password, referralCode) {
 }
 
 
+// Function to delete a message via Telegram API
+async function deleteMessage(chatId, messageId) {
+    const url = `https://api.telegram.org/bot${TOKEN}/deleteMessage`;
+    const body = {
+        chat_id: chatId,
+        message_id: messageId,
+    };
+
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+}
 
 
 
-// Function to check for new funds and avoid redundant notifications
-// Function to check for new funds and avoid redundant notifications
-// Function to check for new funds and avoid redundant notifications
 // Function to check for new funds and avoid redundant notifications
 async function checkForFunds(chatId, userId, messageId) {
     try {
@@ -273,9 +284,10 @@ async function checkForFunds(chatId, userId, messageId) {
                 const restartingMessage = "Restarting bot...";
                 await editMessage(chatId, messageId, restartingMessage);
 
-                // Wait another second and then show the welcome message
+                // Wait another second, delete the message, and then show the welcome message
                 setTimeout(async () => {
-                    await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
+                    await deleteMessage(chatId, messageId); // Delete the restarting message
+                    await showWelcomeMessage(chatId, userId, user.ref_code_invite_others); // Show welcome message
                 }, 1000); // 1000 milliseconds = 1 second
             }, 1000); // 1000 milliseconds = 1 second
 
@@ -289,9 +301,10 @@ async function checkForFunds(chatId, userId, messageId) {
                 const restartingMessage = "Restarting bot...";
                 await editMessage(chatId, messageId, restartingMessage);
 
-                // Wait another second and then show the welcome message
+                // Wait another second, delete the message, and then show the welcome message
                 setTimeout(async () => {
-                    await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
+                    await deleteMessage(chatId, messageId); // Delete the restarting message
+                    await showWelcomeMessage(chatId, userId, user.ref_code_invite_others); // Show welcome message
                 }, 1000); // 1000 milliseconds = 1 second
             }, 1000); // 1000 milliseconds = 1 second
         }
@@ -300,6 +313,7 @@ async function checkForFunds(chatId, userId, messageId) {
         await editMessage(chatId, messageId, "An error occurred while checking for new funds. Please try again.");
     }
 }
+
 
 
 
