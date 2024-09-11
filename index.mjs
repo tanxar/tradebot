@@ -143,7 +143,8 @@ async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
 
         // If token account exists, return the balance
         const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
-        const balance = tokenAccount.tokenAmount.uiAmount;
+        const balance = parseFloat(tokenAccount.tokenAmount.uiAmount); // Ensure it's a number
+        console.log(`USDT balance for wallet ${walletAddress}: ${balance} USDT`);
         return balance;
 
     } catch (error) {
@@ -151,6 +152,7 @@ async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
         return 0;
     }
 }
+
 
 // Function to get user's current balance and other relevant data from the database
 async function getUserBalanceFromDB(userId) {
@@ -220,16 +222,20 @@ async function checkForFunds(chatId, userId, messageId) {
 
     // Fetch current balance in wallet
     const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(solWalletAddress);
+    console.log(`Solana balance for wallet ${solWalletAddress}: ${solanaBalance} USDT`);
 
     // Fetch balance, last checked balance, and total funds from the database
     const { balance: dbBalance, lastCheckedBalance, totalFundsSent } = await getUserBalanceFromDB(userId);
+    console.log(`DB balance: ${dbBalance}, Last checked balance: ${lastCheckedBalance}`);
 
     if (solanaBalance > lastCheckedBalance) {
         // Calculate the new funds received
         const newFunds = solanaBalance - lastCheckedBalance;
+        console.log(`New funds detected: ${newFunds} USDT`);
 
         // Add new funds to the existing balance
         const updatedBalance = dbBalance + newFunds;
+        console.log(`Updated balance: ${updatedBalance} USDT`);
 
         // The last_checked_balance should now be the current wallet balance
         const newCheckedBalance = solanaBalance;
@@ -256,12 +262,28 @@ async function checkForFunds(chatId, userId, messageId) {
 
 
 
+
+// Function to restart the bot after funds are detected
 // Function to restart the bot after funds are detected
 async function restartBotAfterFundsAdded(chatId, userId) {
-    const user = await getUserByTelegramId(userId);
-    const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
-    await showWelcomeMessage(chatId, userId, solanaBalance, user.ref_code_invite_others);
+    try {
+        // Fetch the user data from the database
+        const user = await getUserByTelegramId(userId);
+
+        // Fetch the balance stored in the database
+        const { balance: dbBalance } = await getUserBalanceFromDB(userId);
+
+        // Fetch the referral code from the user data (if applicable)
+        const referralCode = user.ref_code_invite_others || 'N/A';
+
+        // Show the welcome message with the balance from the database
+        await showWelcomeMessage(chatId, userId, dbBalance, referralCode);
+    } catch (error) {
+        console.error(`Error restarting bot after funds added: ${error.message}`);
+        await sendMessage(chatId, "An error occurred while updating your balance. Please try again.");
+    }
 }
+
 
 // Function to edit a message in response to a button click
 async function editMessage(chatId, messageId, newText, replyMarkup = null, parseMode = 'HTML') {
