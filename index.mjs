@@ -455,29 +455,46 @@ async function handlePasswordResponse(chatId, text) {
 }
 
 // Show welcome message after successful login or account creation
-async function showWelcomeMessage(chatId, userId, balance, referralCode) {
-    const message = `Your balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\nClick the referral code to copy.`;
+async function showWelcomeMessage(chatId, userId, referralCode) {
+    try {
+        // Query to get the user's balance from the database
+        const query = 'SELECT balance FROM users WHERE telegram_id = $1';
+        const result = await client.query(query, [String(userId)]);
+        
+        let balance = 0; // Default balance
+        if (result.rows.length > 0) {
+            balance = result.rows[0].balance;
+        }
 
-    const options = {
-        chat_id: chatId,
-        text: message,
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "➕ Add Funds", callback_data: "add_funds" }],
-                [{ text: "Withdraw", callback_data: "withdraw" }],
-                [{ text: 'Referrals', callback_data: 'referrals' },
-                { text: 'Logout', callback_data: 'logout' }],
-            ],
-        },
-    };
+        // Compose the welcome message with the user's balance
+        const message = `Your balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\nClick the referral code to copy.`;
 
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
-    });
+        // Define the inline keyboard for options
+        const options = {
+            chat_id: chatId,
+            text: message,
+            parse_mode: 'HTML',
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: "➕ Add Funds", callback_data: "add_funds" }],
+                    [{ text: "Withdraw", callback_data: "withdraw" }],
+                    [{ text: 'Referrals', callback_data: 'referrals' },
+                    { text: 'Logout', callback_data: 'logout' }],
+                ],
+            },
+        };
+
+        // Send the message using Telegram API
+        await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(options),
+        });
+    } catch (error) {
+        console.error(`Error fetching balance or sending welcome message: ${error.message}`);
+    }
 }
+
 
 // Function to send a message via Telegram
 async function sendMessage(chatId, text, parseMode = 'Markdown') {
