@@ -720,21 +720,24 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
     }
 
     const messageId = session.messageId; // Get the messageId to edit the message
+    console.log(`Handling action: ${action}, for messageId: ${messageId}`); // Debugging log
 
     if (action === 'confirm_withdrawal') {
-        // Proceed with withdrawal logic here, such as sending the USDT
         const { withdrawAmount, walletAddress } = session;
 
         // Step 1: Show the confirmation message
         const confirmMessage = `Withdrawal confirmed:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress}`;
-        await editMessage(chatId, messageId, confirmMessage);
+        console.log(`Step 1: Editing message to confirm withdrawal...`); // Debugging log
+        await editMessage(chatId, messageId, confirmMessage); // Update the message
 
         // Step 2: Wait for 2 seconds, then edit the message to "Restarting bot..."
         setTimeout(async () => {
+            console.log(`Step 2: Editing message to "Restarting bot..."`); // Debugging log
             await editMessage(chatId, messageId, "Restarting bot...");
 
             // Step 3: Wait another 2 seconds, then delete the message and restart the bot
             setTimeout(async () => {
+                console.log(`Step 3: Deleting the message and restarting the bot...`); // Debugging log
                 await deleteMessage(chatId, messageId); // Delete the message
                 delete userSessions[chatId]; // Clear session
                 await restartBot(chatId, userId); // Restart the bot
@@ -745,14 +748,17 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
     } else if (action === 'cancel_withdrawal') {
         // Step 1: Show the cancellation message
         const cancelMessage = "Withdrawal cancelled.";
-        await editMessage(chatId, messageId, cancelMessage);
+        console.log(`Step 1: Editing message to cancel withdrawal...`); // Debugging log
+        await editMessage(chatId, messageId, cancelMessage); // Update the message
 
         // Step 2: Wait for 2 seconds, then edit the message to "Restarting bot..."
         setTimeout(async () => {
+            console.log(`Step 2: Editing message to "Restarting bot..."`); // Debugging log
             await editMessage(chatId, messageId, "Restarting bot...");
 
             // Step 3: Wait another 2 seconds, then delete the message and restart the bot
             setTimeout(async () => {
+                console.log(`Step 3: Deleting the message and restarting the bot...`); // Debugging log
                 await deleteMessage(chatId, messageId); // Delete the message
                 delete userSessions[chatId]; // Clear session
                 await restartBot(chatId, userId); // Restart the bot
@@ -761,6 +767,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         }, 2000); // 2000 milliseconds = 2 seconds
     }
 }
+
 
 
 
