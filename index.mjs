@@ -657,22 +657,28 @@ async function handleWithdrawResponse(chatId, text) {
         balance = result.rows[0].balance;
     }
     // Step 1: Enter Withdrawal Amount
-    if (step === 'enter_amount') {
-        const amount = parseFloat(text);
+   // Step 1: Enter Withdrawal Amount
+if (step === 'enter_amount') {
+    // Replace any "," with "." to standardize the decimal separator
+    const normalizedText = text.replace(",", ".");
+    
+    // Parse the normalized text to a float
+    const amount = parseFloat(normalizedText);
 
-        if (isNaN(amount) || amount <= 0 || amount > balance) {
-            await sendMessage(chatId, "Please enter a valid withdrawal amount.");
-            return;
-        }
-
-        // Update session with amount and move to the next step
-        userSessions[chatId].withdrawAmount = amount;
-        userSessions[chatId].step = 'enter_wallet_address';
-
-        // Ask the user to enter the wallet address
-        console.log(`Amount entered: ${amount}. Asking for wallet address.`);
-        await sendMessage(chatId, "Enter solana wallet address (USDT):");
+    if (isNaN(amount) || amount <= 0 || amount > balance) {
+        await sendMessage(chatId, "Please enter a valid withdrawal amount.");
+        return;
     }
+
+    // Update session with amount and move to the next step
+    userSessions[chatId].withdrawAmount = amount;
+    userSessions[chatId].step = 'enter_wallet_address';
+
+    // Ask the user to enter the wallet address
+    console.log(`Amount entered: ${amount}. Asking for wallet address.`);
+    await sendMessage(chatId, "Enter solana wallet address (USDT):");
+}
+
 
     // Step 2: Enter Wallet Address
     else if (step === 'enter_wallet_address') {
