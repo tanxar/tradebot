@@ -691,9 +691,6 @@ async function handleWithdrawResponse(chatId, text) {
     }
 }
 
-
-
-// Function to handle withdrawal confirmation or cancellation
 // Function to handle withdrawal confirmation or cancellation
 async function handleWithdrawConfirmation(chatId, userId, action) {
     const session = userSessions[chatId];
@@ -709,42 +706,41 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         // Proceed with withdrawal logic here, such as sending the USDT
         const { withdrawAmount, walletAddress } = session;
 
-        // Add your logic here to perform the withdrawal, such as interacting with the Solana blockchain
-
-        // Edit the last message to confirm the withdrawal
+        // First, show the confirmation message
         const confirmMessage = `Withdrawal confirmed:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress}`;
         await editMessage(chatId, messageId, confirmMessage);
 
-        // After 1 second, edit the message to say "Restarting bot..."
+        // After 2 seconds, edit the message to say "Restarting bot..."
         setTimeout(async () => {
             await editMessage(chatId, messageId, "Restarting bot...");
 
-            // After another second, restart the bot and delete the session
+            // After another 1 second, restart the bot and delete the session
             setTimeout(async () => {
                 delete userSessions[chatId];
                 await restartBot(chatId, userId);
             }, 1000); // 1000 milliseconds = 1 second
 
-        }, 1000); // 1000 milliseconds = 1 second
+        }, 2000); // 2000 milliseconds = 2 seconds
 
     } else if (action === 'cancel_withdrawal') {
-        // Edit the last message to cancel the withdrawal
-        const cancelMessage = "Withdrawal cancelled. Restarting bot...";
+        // First, show the cancellation message
+        const cancelMessage = "Withdrawal cancelled.";
         await editMessage(chatId, messageId, cancelMessage);
 
-        // After 1 second, edit the message to "Restarting bot..."
+        // After 2 seconds, edit the message to say "Restarting bot..."
         setTimeout(async () => {
             await editMessage(chatId, messageId, "Restarting bot...");
 
-            // After another second, restart the bot and delete the session
+            // After another 1 second, restart the bot and delete the session
             setTimeout(async () => {
                 delete userSessions[chatId];
                 await restartBot(chatId, userId);
             }, 1000); // 1000 milliseconds = 1 second
 
-        }, 1000); // 1000 milliseconds = 1 second
+        }, 2000); // 2000 milliseconds = 2 seconds
     }
 }
+
 
 
 // Function to send a message via Telegram
