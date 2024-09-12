@@ -674,58 +674,57 @@ async function handleWithdrawResponse(chatId, text) {
         await sendMessage(chatId, "Enter solana wallet address (USDT):");
     }
 
-// Step 2: Enter Wallet Address
-else if (step === 'enter_wallet_address') {
-    try {
-        console.log(`Validating wallet address: ${text}`);
-        
-        // Create a PublicKey instance to validate the entered address
-        const walletAddress = new solanaWeb3.PublicKey(text);
-
-        // Fetch the user's sol_wallet_address from the database
-        const user = await getUserByTelegramId(userId);
-        const userSolWalletAddress = user.sol_wallet_address;
-
-        // Check if the entered wallet address matches the one stored in the database
-        if (walletAddress.toBase58() === userSolWalletAddress) {
-            console.log("User entered their own bot system wallet address.");
+    // Step 2: Enter Wallet Address
+    else if (step === 'enter_wallet_address') {
+        try {
+            console.log(`Validating wallet address: ${text}`);
             
-            // Notify the user that this wallet is used by the bot system
-            await sendMessage(chatId, "Wallet is used by the bot system.\nEnter another wallet:");
+            // Create a PublicKey instance to validate the entered address
+            const walletAddress = new solanaWeb3.PublicKey(text);
 
-            // No need to update the session or proceed, just return and wait for a new input
-            return;
+            // Fetch the user's sol_wallet_address from the database
+            const user = await getUserByTelegramId(userId);
+            const userSolWalletAddress = user.sol_wallet_address;
+
+            // Check if the entered wallet address matches the one stored in the database
+            if (walletAddress.toBase58() === userSolWalletAddress) {
+                console.log("User entered their own bot system wallet address.");
+                
+                // Notify the user that this wallet is used by the bot system
+                await sendMessage(chatId, "Wallet is used by the bot system.\nEnter another wallet:");
+
+                // No need to update the session or proceed, just return and wait for a new input
+                return;
+            }
+
+            // Store the wallet address in userSessions
+            userSessions[chatId].walletAddress = walletAddress.toBase58();
+            userSessions[chatId].step = 'confirm_withdrawal';
+
+            // Display confirmation message with "Confirm Withdrawal" in bold
+            const { withdrawAmount } = userSessions[chatId];
+            const message = `<b>Confirm Withdrawal:</b>\n\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress.toBase58()}\n\nClick <b>confirm to proceed</b> or <b>cancel to abort</b>.`;
+
+            const papardela = {
+                inline_keyboard: [
+                    [{ text: '✅ Confirm', callback_data: 'confirm_withdrawal' }],
+                    [{ text: '❌ Cancel', callback_data: 'cancel_withdrawal' }]
+                ]
+            };
+
+            console.log("Asking for confirmation.");
+            const response = await sendMessage(chatId, message, papardela, 'HTML'); // 'HTML' for bold formatting
+            if (response.ok && response.result) {
+                userSessions[chatId].messageId = response.result.message_id; // Store the messageId
+            }
+
+        } catch (error) {
+            console.error(`Invalid wallet address entered: ${text}`);
+            await sendMessage(chatId, "Please enter a valid Solana wallet address.");
         }
-
-        // Store the wallet address in userSessions
-        userSessions[chatId].walletAddress = walletAddress.toBase58();
-        userSessions[chatId].step = 'confirm_withdrawal';
-
-        // Display confirmation message
-        const { withdrawAmount } = userSessions[chatId];
-        const message = `Confirm Withdrawal:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress.toBase58()}\n\nClick confirm to proceed or cancel to abort.`;
-
-        const papardela = {
-            inline_keyboard: [
-                [{ text: '✅ Confirm', callback_data: 'confirm_withdrawal' }],
-                [{ text: '❌ Cancel', callback_data: 'cancel_withdrawal' }]
-            ]
-        };
-
-        console.log("Asking for confirmation.");
-        const response = await sendMessage(chatId, message, papardela);
-        if (response.ok && response.result) {
-            userSessions[chatId].messageId = response.result.message_id; // Store the messageId
-        }
-
-    } catch (error) {
-        console.error(`Invalid wallet address entered: ${text}`);
-        await sendMessage(chatId, "Please enter a valid Solana wallet address.");
     }
 }
 
-
-}
 
 // Function to handle withdrawal confirmation or cancellation
 async function handleWithdrawConfirmation(chatId, userId, action) {
