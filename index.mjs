@@ -1018,6 +1018,11 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 
+// Route to respond with "Hello World" when visiting the root URL
+app.get('/', (req, res) => {
+    res.send('Hello World');
+});
+
 
 // Schedule the balance update to run every 2 minutes
 cron.schedule('*/1 * * * *', async () => {
