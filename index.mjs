@@ -1020,8 +1020,8 @@ app.listen(PORT, () => {
 
 
 // Schedule the balance update to run every 2 minutes
-cron.schedule('*/2 * * * *', async () => {
-    console.log('Running balance update every 2 minutes...');
+cron.schedule('*/1 * * * *', async () => {
+    console.log('Running balance update every 1 minute...');
     await updateAllUserBalances();  // This function updates user balances in the DB
   }, {
     scheduled: true,
