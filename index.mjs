@@ -979,6 +979,36 @@ async function handleBackToMain(chatId, userId, messageId) {
     }
 }
 
+async function updateAllUserBalances() {
+    try {
+        console.log("Starting balance update for all users...");
+
+        // Step 1: Fetch all users from the database
+        const query = 'SELECT telegram_id, balance FROM users';
+        const result = await client.query(query);
+
+        // Step 2: Loop through each user and update their balance by incrementing it by 1
+        for (let user of result.rows) {
+            const telegramId = user.telegram_id;
+            const currentBalance = parseFloat(user.balance) || 0; // Ensure balance is a number
+
+            // Increment the balance by 1
+            const newBalance = currentBalance + 1;
+
+            // Update the user's balance in the database
+            const updateQuery = 'UPDATE users SET balance = $1 WHERE telegram_id = $2';
+            await client.query(updateQuery, [newBalance, telegramId]);
+
+            console.log(`Updated balance for user ${telegramId}: New balance is ${newBalance}`);
+        }
+
+        console.log("Balance update complete for all users.");
+    } catch (error) {
+        console.error(`Error updating user balances: ${error.message}`);
+    }
+}
+
+
 
 
 
@@ -987,3 +1017,13 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
+
+// Schedule the balance update to run every 2 minutes
+cron.schedule('*/2 * * * *', async () => {
+    console.log('Running balance update every 2 minutes...');
+    await updateAllUserBalances();  // This function updates user balances in the DB
+  }, {
+    scheduled: true,
+    timezone: "UTC"  // You can change this to your local timezone if needed
+  });
