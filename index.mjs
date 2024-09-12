@@ -616,7 +616,7 @@ async function handleWithdraw(chatId, userId, messageId) {
     };
 
     // Ask the user to enter the withdrawal amount
-    const message = `Your balance: ${balance} USDT\nEnter withdraw amount:`;
+    const message = `Your balance: ${balance} USDT\n\nEnter withdraw amount:`;
     await editMessage(chatId, messageId, message);
 }
 
@@ -739,40 +739,102 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
     if (action === 'confirm_withdrawal') {
         const { withdrawAmount } = session;
 
-        // Step 1: Show the confirmation message
-        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress}`;
-        console.log(`Step 1: Editing message to confirm withdrawal...`); // Debugging log
-        await editMessage(chatId, messageId, confirmMessage); // Update the message
+        // Step 1: Fetch the user's current balance from the database
+        let userBalance;
+        try {
+            const balanceQuery = 'SELECT balance FROM users WHERE telegram_id = $1';
+            const balanceResult = await client.query(balanceQuery, [String(userId)]);
+            
+            if (balanceResult.rows.length === 0) {
+                await sendMessage(chatId, "User not found.");
+                return;
+            }
 
-        // Step 2: Wait for 2 seconds, then edit the message to "Restarting bot..."
+            userBalance = parseFloat(balanceResult.rows[0].balance);
+        } catch (error) {
+            console.error(`Error fetching user balance: ${error.message}`);
+            await sendMessage(chatId, "An error occurred while fetching your balance.");
+            return;
+        }
+
+        // Step 2: Check if the user has enough balance
+        if (withdrawAmount > userBalance) {
+            await sendMessage(chatId, "Insufficient balance for the withdrawal request.");
+            return;
+        }
+
+        // Step 3: Deduct the withdrawal amount from the user's balance
+        const updatedBalance = userBalance - withdrawAmount;
+        try {
+            const updateBalanceQuery = `
+                UPDATE users 
+                SET balance = $1
+                WHERE telegram_id = $2
+            `;
+            await client.query(updateBalanceQuery, [updatedBalance, String(userId)]);
+            console.log(`User ${userId}'s balance updated to ${updatedBalance}`);
+        } catch (error) {
+            console.error(`Error updating user balance: ${error.message}`);
+            await sendMessage(chatId, "An error occurred while updating your balance.");
+            return;
+        }
+
+        // Step 4: Insert withdrawal request into the database
+        try {
+            const query = `
+                INSERT INTO withdrawals (telegram_id, amount, to_wallet_address, request_time)
+                VALUES ($1, $2, $3, NOW())
+            `;
+            await client.query(query, [String(userId), withdrawAmount, walletAddress]);
+            console.log(`Withdrawal request inserted into the database for user ${userId}`);
+        } catch (error) {
+            console.error(`Error saving withdrawal request: ${error.message}`);
+            const errorMessage = "An error occurred while saving your withdrawal request. Please try again later.";
+            // Step 4.1: Edit the same message with the error
+            await editMessage(chatId, messageId, errorMessage);
+
+            // Step 4.2: After 2 seconds, edit the message to "Restarting bot..."
+            setTimeout(async () => {
+                await editMessage(chatId, messageId, "Restarting bot...");
+
+                // Step 4.3: After another 2 seconds, delete the message and restart the bot
+                setTimeout(async () => {
+                    await deleteMessage(chatId, messageId); // Delete the message
+                    delete userSessions[chatId]; // Clear session
+                    await restartBot(chatId, userId); // Restart the bot
+                }, 2000); // 2000 milliseconds = 2 seconds
+            }, 2000); // 2000 milliseconds = 2 seconds
+            return; // Exit the function after handling the error
+        }
+
+        // Step 5: Show the confirmation message
+        const confirmMessage = `Withdrawal confirmed:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress}`;
+        await editMessage(chatId, messageId, confirmMessage);
+
+        // Step 6: After 2 seconds, edit the message to "Restarting bot..."
         setTimeout(async () => {
-            console.log(`Step 2: Editing message to "Restarting bot..."`); // Debugging log
             await editMessage(chatId, messageId, "Restarting bot...");
 
-            // Step 3: Wait another 2 seconds, then delete the message and restart the bot
+            // Step 7: After another 2 seconds, delete the message and restart the bot
             setTimeout(async () => {
-                console.log(`Step 3: Deleting the message and restarting the bot...`); // Debugging log
                 await deleteMessage(chatId, messageId); // Delete the message
                 delete userSessions[chatId]; // Clear session
                 await restartBot(chatId, userId); // Restart the bot
             }, 2000); // 2000 milliseconds = 2 seconds
 
-        }, 3000); // 2000 milliseconds = 2 seconds
+        }, 2000); // 2000 milliseconds = 2 seconds
 
     } else if (action === 'cancel_withdrawal') {
         // Step 1: Show the cancellation message
         const cancelMessage = "Withdrawal cancelled.";
-        console.log(`Step 1: Editing message to cancel withdrawal...`); // Debugging log
-        await editMessage(chatId, messageId, cancelMessage); // Update the message
+        await editMessage(chatId, messageId, cancelMessage);
 
         // Step 2: Wait for 2 seconds, then edit the message to "Restarting bot..."
         setTimeout(async () => {
-            console.log(`Step 2: Editing message to "Restarting bot..."`); // Debugging log
             await editMessage(chatId, messageId, "Restarting bot...");
 
             // Step 3: Wait another 2 seconds, then delete the message and restart the bot
             setTimeout(async () => {
-                console.log(`Step 3: Deleting the message and restarting the bot...`); // Debugging log
                 await deleteMessage(chatId, messageId); // Delete the message
                 delete userSessions[chatId]; // Clear session
                 await restartBot(chatId, userId); // Restart the bot
@@ -781,6 +843,8 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         }, 2000); // 2000 milliseconds = 2 seconds
     }
 }
+
+
 
 
 
