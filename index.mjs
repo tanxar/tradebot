@@ -740,7 +740,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         const { withdrawAmount } = session;
 
         // Step 1: Show the confirmation message
-        const confirmMessage = `Withdrawal confirmed:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress}`;
+        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress}`;
         console.log(`Step 1: Editing message to confirm withdrawal...`); // Debugging log
         await editMessage(chatId, messageId, confirmMessage); // Update the message
 
@@ -757,7 +757,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
                 await restartBot(chatId, userId); // Restart the bot
             }, 2000); // 2000 milliseconds = 2 seconds
 
-        }, 2000); // 2000 milliseconds = 2 seconds
+        }, 3000); // 2000 milliseconds = 2 seconds
 
     } else if (action === 'cancel_withdrawal') {
         // Step 1: Show the cancellation message
