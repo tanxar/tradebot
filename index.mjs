@@ -476,9 +476,8 @@ async function showInitialOptions(chatId, userId, firstName) {
     let options;
 
     if (userExists) {
-        const message = `Welcome to CryptoGrowth bot.\n\n
-        This bot uses strategies on the Solana network to generate returns on USDT deposits. Offering up to 30%(aprox.) monthly gains, it allows users to manage their investments and benefit from referral rewards. Secure and transparent, designed for steady growth.        
-        \n\nAccount ID: ${userId}`;
+        const message = `Welcome to CryptoGrowth bot.\n\nThis bot uses strategies on the Solana network to generate returns on USDT deposits. Offering up to 30%(aprox.) monthly gains, it allows users to manage their investments and benefit from referral rewards. Secure and transparent, designed for steady growth.        
+        \n\nAccount ID: ${userId}\n\n`;
         options = {
             chat_id: chatId,
             text: message,
@@ -571,7 +570,7 @@ async function showWelcomeMessage(chatId, userId, referralCode) {
         }
 
         // Compose the welcome message with the user's balance
-        const message = `Your balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>\nClick the referral code to copy.`;
+        const message = `Your balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>(Click to copy)`;
 
         // Define the inline keyboard for options
         const options = {
