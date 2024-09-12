@@ -445,6 +445,16 @@ app.post('/webhook', async (req, res) => {
             console.log(`Logout button clicked by user ${userId}`);
             await handleLogout(chatId, userId, messageId); // Call the logout handler
         }
+          else if (data === 'referrals') {
+            console.log("Referrals button clicked by user ${userId}");
+            await handleReferrals(chatId, userId, messageId);
+        }
+        if (data === 'back_to_main') {
+            console.log("Back button clicked by user ${userId}");
+            await handleBackToMain(chatId, userId, messageId);
+        }
+        
+        
     }
 
     if (message) {
@@ -912,6 +922,61 @@ async function sendMessage(chatId, text, replyMarkup = null, parseMode = 'Markdo
     }
 }
 
+async function handleReferrals(chatId, userId, messageId) {
+    try {
+        // Fetch the user's referral code
+        const userQuery = 'SELECT ref_code_invite_others FROM users WHERE telegram_id = $1';
+        const userResult = await client.query(userQuery, [String(userId)]);
+        
+        if (userResult.rows.length === 0) {
+            await editMessage(chatId, messageId, "User not found.");
+            return;
+        }
+
+        const referralCode = userResult.rows[0].ref_code_invite_others;
+
+        // Query to find referrals using the referral code (only fetching telegram ID)
+        const referralsQuery = 'SELECT telegram_id FROM users WHERE ref_code_invited_by = $1';
+        const referralsResult = await client.query(referralsQuery, [referralCode]);
+
+        let message = 'Referrals\n\nReferrals are people you invited to use this bot.\n\n';
+
+        if (referralsResult.rows.length > 0) {
+            message += 'Your referrals:\n';
+            referralsResult.rows.forEach((referral, index) => {
+                message += `${index + 1}. User ID: ${referral.telegram_id}\n`;
+            });
+        } else {
+            message += 'No referrals found.';
+        }
+
+        // Add a "Back" button at the end
+        const replyMarkup = {
+            inline_keyboard: [
+                [{ text: '⬅️ Back', callback_data: 'back_to_main' }] // "Back" button
+            ],
+        };
+
+        // Edit the message to display referrals and show the "Back" button
+        await editMessage(chatId, messageId, message, replyMarkup);
+    } catch (error) {
+        console.error(`Error fetching referrals: ${error.message}`);
+        await editMessage(chatId, messageId, "An error occurred while fetching referrals.");
+    }
+}
+
+async function handleBackToMain(chatId, userId, messageId) {
+    try {
+        // Step 1: Delete the current message (the one with the referrals)
+        await deleteMessage(chatId, messageId);
+
+        // Step 2: Restart the bot by showing the initial options or welcome message
+        await restartBot(chatId, userId);
+    } catch (error) {
+        console.error(`Error handling Back button: ${error.message}`);
+        await sendMessage(chatId, "An error occurred. Please try again.");
+    }
+}
 
 
 
