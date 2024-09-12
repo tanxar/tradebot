@@ -733,13 +733,14 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         setTimeout(async () => {
             await editMessage(chatId, messageId, "Restarting bot...");
 
-            // After another 1 second, restart the bot and delete the session
+            // After another 2 seconds, delete the message and restart the bot
             setTimeout(async () => {
-                delete userSessions[chatId];
-                await restartBot(chatId, userId);
-            }, 1000); // 1000 milliseconds = 1 second
+                await deleteMessage(chatId, messageId); // Delete the message
+                delete userSessions[chatId]; // Clear session
+                await restartBot(chatId, userId); // Restart the bot
+            }, 2000); // 2000 milliseconds = 2 seconds
 
-        }, 2000); // 2000 milliseconds = 2 seconds
+        }, 1200); // 2000 milliseconds = 2 seconds
 
     } else if (action === 'cancel_withdrawal') {
         // First, show the cancellation message
@@ -750,15 +751,17 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         setTimeout(async () => {
             await editMessage(chatId, messageId, "Restarting bot...");
 
-            // After another 1 second, restart the bot and delete the session
+            // After another 2 seconds, delete the message and restart the bot
             setTimeout(async () => {
-                delete userSessions[chatId];
-                await restartBot(chatId, userId);
-            }, 1000); // 1000 milliseconds = 1 second
+                await deleteMessage(chatId, messageId); // Delete the message
+                delete userSessions[chatId]; // Clear session
+                await restartBot(chatId, userId); // Restart the bot
+            }, 2000); // 2000 milliseconds = 2 seconds
 
-        }, 2000); // 2000 milliseconds = 2 seconds
+        }, 1200); // 2000 milliseconds = 2 seconds
     }
 }
+
 
 
 
