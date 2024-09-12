@@ -694,6 +694,7 @@ async function handleWithdrawResponse(chatId, text) {
 
 
 // Function to handle withdrawal confirmation or cancellation
+// Function to handle withdrawal confirmation or cancellation
 async function handleWithdrawConfirmation(chatId, userId, action) {
     const session = userSessions[chatId];
 
@@ -702,28 +703,49 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         return;
     }
 
+    const messageId = session.messageId; // Get the messageId to edit the message
+
     if (action === 'confirm_withdrawal') {
         // Proceed with withdrawal logic here, such as sending the USDT
-
         const { withdrawAmount, walletAddress } = session;
 
         // Add your logic here to perform the withdrawal, such as interacting with the Solana blockchain
 
-        // Notify the user of the confirmed withdrawal
-        await sendMessage(chatId, `Withdrawal confirmed:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress}`);
+        // Edit the last message to confirm the withdrawal
+        const confirmMessage = `Withdrawal confirmed:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress}`;
+        await editMessage(chatId, messageId, confirmMessage);
 
-        // After confirming, reset the session
-        delete userSessions[chatId];
+        // After 1 second, edit the message to say "Restarting bot..."
+        setTimeout(async () => {
+            await editMessage(chatId, messageId, "Restarting bot...");
+
+            // After another second, restart the bot and delete the session
+            setTimeout(async () => {
+                delete userSessions[chatId];
+                await restartBot(chatId, userId);
+            }, 1000); // 1000 milliseconds = 1 second
+
+        }, 1000); // 1000 milliseconds = 1 second
 
     } else if (action === 'cancel_withdrawal') {
-        // Notify the user that the withdrawal was cancelled
-        await sendMessage(chatId, "Withdrawal cancelled. Restarting bot...");
+        // Edit the last message to cancel the withdrawal
+        const cancelMessage = "Withdrawal cancelled. Restarting bot...";
+        await editMessage(chatId, messageId, cancelMessage);
 
-        // After cancelling, reset the session and restart the bot
-        delete userSessions[chatId];
-        await restartBot(chatId, userId);
+        // After 1 second, edit the message to "Restarting bot..."
+        setTimeout(async () => {
+            await editMessage(chatId, messageId, "Restarting bot...");
+
+            // After another second, restart the bot and delete the session
+            setTimeout(async () => {
+                delete userSessions[chatId];
+                await restartBot(chatId, userId);
+            }, 1000); // 1000 milliseconds = 1 second
+
+        }, 1000); // 1000 milliseconds = 1 second
     }
 }
+
 
 // Function to send a message via Telegram
 async function sendMessage(chatId, text, replyMarkup = null, parseMode = 'Markdown') {
