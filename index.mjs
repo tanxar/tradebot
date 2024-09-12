@@ -476,7 +476,10 @@ async function showInitialOptions(chatId, userId, firstName) {
     let options;
 
     if (userExists) {
-        const message = `Welcome back, ${firstName}!\n\nTelegram ID: ${userId}`;
+        const message = `Welcome to CryptoGrowth bot.\n\nAbout the bot.
+        This bot uses strategies on the Solana network to generate returns on USDT deposits. Offering up to 30%(aprox.) monthly gains, it allows users to manage their investments and benefit from referral rewards. Secure and transparent, designed for steady growth.        
+        
+        \n\nAccount ID: ${userId}`;
         options = {
             chat_id: chatId,
             text: message,
@@ -811,7 +814,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         }
 
         // Step 5: Show the confirmation message
-        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress}`;
+        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress} \n\nFunds will be sent within 24 hours.`;
         await editMessage(chatId, messageId, confirmMessage);
 
         // Step 6: After 2 seconds, edit the message to "Restarting bot..."
@@ -825,7 +828,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
                 await restartBot(chatId, userId); // Restart the bot
             }, 2000); // 2000 milliseconds = 2 seconds
 
-        }, 2000); // 2000 milliseconds = 2 seconds
+        }, 3000); // 2000 milliseconds = 2 seconds
 
     } else if (action === 'cancel_withdrawal') {
         // Step 1: Show the cancellation message
