@@ -725,42 +725,43 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         // Proceed with withdrawal logic here, such as sending the USDT
         const { withdrawAmount, walletAddress } = session;
 
-        // First, show the confirmation message
+        // Step 1: Show the confirmation message
         const confirmMessage = `Withdrawal confirmed:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress}`;
         await editMessage(chatId, messageId, confirmMessage);
 
-        // After 2 seconds, edit the message to say "Restarting bot..."
+        // Step 2: Wait for 2 seconds, then edit the message to "Restarting bot..."
         setTimeout(async () => {
             await editMessage(chatId, messageId, "Restarting bot...");
 
-            // After another 2 seconds, delete the message and restart the bot
+            // Step 3: Wait another 2 seconds, then delete the message and restart the bot
             setTimeout(async () => {
                 await deleteMessage(chatId, messageId); // Delete the message
                 delete userSessions[chatId]; // Clear session
                 await restartBot(chatId, userId); // Restart the bot
             }, 2000); // 2000 milliseconds = 2 seconds
 
-        }, 1200); // 2000 milliseconds = 2 seconds
+        }, 2000); // 2000 milliseconds = 2 seconds
 
     } else if (action === 'cancel_withdrawal') {
-        // First, show the cancellation message
+        // Step 1: Show the cancellation message
         const cancelMessage = "Withdrawal cancelled.";
         await editMessage(chatId, messageId, cancelMessage);
 
-        // After 2 seconds, edit the message to say "Restarting bot..."
+        // Step 2: Wait for 2 seconds, then edit the message to "Restarting bot..."
         setTimeout(async () => {
             await editMessage(chatId, messageId, "Restarting bot...");
 
-            // After another 2 seconds, delete the message and restart the bot
+            // Step 3: Wait another 2 seconds, then delete the message and restart the bot
             setTimeout(async () => {
                 await deleteMessage(chatId, messageId); // Delete the message
                 delete userSessions[chatId]; // Clear session
                 await restartBot(chatId, userId); // Restart the bot
             }, 2000); // 2000 milliseconds = 2 seconds
 
-        }, 1200); // 2000 milliseconds = 2 seconds
+        }, 2000); // 2000 milliseconds = 2 seconds
     }
 }
+
 
 
 
