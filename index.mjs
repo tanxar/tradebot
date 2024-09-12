@@ -441,6 +441,9 @@ app.post('/webhook', async (req, res) => {
             await handleWithdrawConfirmation(chatId, userId, 'confirm_withdrawal');
         } else if (data === 'cancel_withdrawal') {
             await handleWithdrawConfirmation(chatId, userId, 'cancel_withdrawal');
+        } else if (data === 'logout') {  // New logout action
+            console.log(`Logout button clicked by user ${userId}`);
+            await handleLogout(chatId, userId, messageId); // Call the logout handler
         }
     }
 
@@ -808,7 +811,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         }
 
         // Step 5: Show the confirmation message
-        const confirmMessage = `Withdrawal confirmed:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress}`;
+        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress}`;
         await editMessage(chatId, messageId, confirmMessage);
 
         // Step 6: After 2 seconds, edit the message to "Restarting bot..."
@@ -845,6 +848,25 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
 }
 
 
+// Function to handle the logout button click
+async function handleLogout(chatId, userId, messageId) {
+    // Step 1: Edit the message to "Logging you out..."
+    await editMessage(chatId, messageId, "Logging you out...");
+
+    // Step 2: Wait for 1 second, then edit the message to "Restarting bot..."
+    setTimeout(async () => {
+        await editMessage(chatId, messageId, "Restarting bot...");
+
+        // Step 3: Wait another second, delete the message, and then show the login options
+        setTimeout(async () => {
+            await deleteMessage(chatId, messageId); // Delete the message
+            delete userSessions[chatId]; // Clear the session data
+
+            // Step 4: Show the login options
+            await showInitialOptions(chatId, userId, null); // No need to pass firstName during logout
+        }, 1000); // 1000 milliseconds = 1 second
+    }, 1000); // 1000 milliseconds = 1 second
+}
 
 
 
