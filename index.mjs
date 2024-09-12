@@ -684,23 +684,25 @@ else if (step === 'enter_wallet_address') {
             return;
         }
 
-        // If no error is thrown, the wallet address is valid and not the system wallet
-        userSessions[chatId].walletAddress = walletAddress.toBase58();
-        userSessions[chatId].step = 'confirm_withdrawal';
+      // Display confirmation message for withdrawal
+const { withdrawAmount } = userSessions[chatId];
+const message = `Confirm Withdrawal:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress.toBase58()}\n\nClick confirm to proceed or cancel to abort.`;
 
-        // Display confirmation message
-        const { withdrawAmount } = userSessions[chatId];
-        const message = `Confirm Withdrawal:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress.toBase58()}\n\nClick confirm to proceed or cancel to abort.`;
+const papardela = {
+    inline_keyboard: [
+        [{ text: '✅ Confirm', callback_data: 'confirm_withdrawal' }],
+        [{ text: '❌ Cancel', callback_data: 'cancel_withdrawal' }]
+    ]
+};
 
-        const papardela = {
-            inline_keyboard: [
-                [{ text: '✅ Confirm', callback_data: 'confirm_withdrawal' }],
-                [{ text: '❌ Cancel', callback_data: 'cancel_withdrawal' }]
-            ]
-        };
+console.log("Asking for confirmation.");
 
-        console.log("Asking for confirmation.");
-        await sendMessage(chatId, message, papardela);
+// Send the confirmation message and store the messageId
+const response = await sendMessage(chatId, message, papardela);
+if (response.ok && response.result) {
+    userSessions[chatId].messageId = response.result.message_id; // Store the messageId
+}
+
         
     } catch (error) {
         console.error(`Invalid wallet address entered: ${text}`);
@@ -721,6 +723,11 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
 
     const messageId = session.messageId; // Get the messageId to edit the message
     console.log(`Handling action: ${action}, for messageId: ${messageId}`); // Debugging log
+
+    if (messageId === undefined) {
+        console.error("Error: messageId is undefined.");
+        return;
+    }
 
     if (action === 'confirm_withdrawal') {
         const { withdrawAmount, walletAddress } = session;
@@ -773,6 +780,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
 
 
 
+
 // Function to send a message via Telegram
 async function sendMessage(chatId, text, replyMarkup = null, parseMode = 'Markdown') {
     const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
@@ -802,15 +810,13 @@ async function sendMessage(chatId, text, replyMarkup = null, parseMode = 'Markdo
         // Log the Telegram API response
         console.log('Telegram API response:', json);
 
-        // Check if the response is not ok and log the error description
-        if (!json.ok) {
-            console.error(`Failed to send message: ${json.description}`);
-        }
-
+        return json; // Return the full response to capture messageId
     } catch (error) {
         console.error(`Error sending message: ${error.message}`);
+        return null;
     }
 }
+
 
 
 
