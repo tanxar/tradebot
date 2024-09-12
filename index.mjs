@@ -939,7 +939,8 @@ async function handleReferrals(chatId, userId, messageId) {
         const referralsQuery = 'SELECT telegram_id FROM users WHERE ref_code_invited_by = $1';
         const referralsResult = await client.query(referralsQuery, [referralCode]);
 
-        let message = 'Referrals\n\nReferrals are people you invited to use this bot.\n\n';
+        // Add bold formatting for the "Referrals" title
+        let message = '<b>Referrals</b>\n\nReferrals are people you invited to use this bot.\n\n';
 
         if (referralsResult.rows.length > 0) {
             message += 'Your referrals:\n';
@@ -958,12 +959,13 @@ async function handleReferrals(chatId, userId, messageId) {
         };
 
         // Edit the message to display referrals and show the "Back" button
-        await editMessage(chatId, messageId, message, replyMarkup);
+        await editMessage(chatId, messageId, message, replyMarkup, 'HTML'); // 'HTML' for formatting
     } catch (error) {
         console.error(`Error fetching referrals: ${error.message}`);
         await editMessage(chatId, messageId, "An error occurred while fetching referrals.");
     }
 }
+
 
 async function handleBackToMain(chatId, userId, messageId) {
     try {
