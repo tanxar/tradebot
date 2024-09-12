@@ -660,8 +660,7 @@ async function handleWithdrawResponse(chatId, text) {
         await sendMessage(chatId, "Enter solana wallet address (USDT):");
     }
 
-    // Step 2: Enter Wallet Address
-    // Step 2: Enter Wallet Address
+// Step 2: Enter Wallet Address
 else if (step === 'enter_wallet_address') {
     try {
         console.log(`Validating wallet address: ${text}`);
@@ -684,31 +683,33 @@ else if (step === 'enter_wallet_address') {
             return;
         }
 
-      // Display confirmation message for withdrawal
-const { withdrawAmount } = userSessions[chatId];
-const message = `Confirm Withdrawal:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress.toBase58()}\n\nClick confirm to proceed or cancel to abort.`;
+        // Store the wallet address in userSessions
+        userSessions[chatId].walletAddress = walletAddress.toBase58();
+        userSessions[chatId].step = 'confirm_withdrawal';
 
-const papardela = {
-    inline_keyboard: [
-        [{ text: '✅ Confirm', callback_data: 'confirm_withdrawal' }],
-        [{ text: '❌ Cancel', callback_data: 'cancel_withdrawal' }]
-    ]
-};
+        // Display confirmation message
+        const { withdrawAmount } = userSessions[chatId];
+        const message = `Confirm Withdrawal:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress.toBase58()}\n\nClick confirm to proceed or cancel to abort.`;
 
-console.log("Asking for confirmation.");
+        const papardela = {
+            inline_keyboard: [
+                [{ text: '✅ Confirm', callback_data: 'confirm_withdrawal' }],
+                [{ text: '❌ Cancel', callback_data: 'cancel_withdrawal' }]
+            ]
+        };
 
-// Send the confirmation message and store the messageId
-const response = await sendMessage(chatId, message, papardela);
-if (response.ok && response.result) {
-    userSessions[chatId].messageId = response.result.message_id; // Store the messageId
-}
+        console.log("Asking for confirmation.");
+        const response = await sendMessage(chatId, message, papardela);
+        if (response.ok && response.result) {
+            userSessions[chatId].messageId = response.result.message_id; // Store the messageId
+        }
 
-        
     } catch (error) {
         console.error(`Invalid wallet address entered: ${text}`);
         await sendMessage(chatId, "Please enter a valid Solana wallet address.");
     }
 }
+
 
 }
 
@@ -729,8 +730,14 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         return;
     }
 
+    const walletAddress = session.walletAddress; // Retrieve the wallet address
+    if (walletAddress === undefined) {
+        console.error("Error: Wallet address is undefined.");
+        return;
+    }
+
     if (action === 'confirm_withdrawal') {
-        const { withdrawAmount, walletAddress } = session;
+        const { withdrawAmount } = session;
 
         // Step 1: Show the confirmation message
         const confirmMessage = `Withdrawal confirmed:\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress}`;
@@ -774,6 +781,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         }, 2000); // 2000 milliseconds = 2 seconds
     }
 }
+
 
 
 
