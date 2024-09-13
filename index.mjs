@@ -966,8 +966,7 @@ async function handleReferrals(chatId, userId, messageId) {
 
         let message = `
 <b>Referral Program Details</b>\n
-By inviting others to use this bot, you earn a bonus that increases your overall return on funds.\n
-All referral bonuses are automatically applied to your returns./n
+By inviting others to use this bot, you earn a bonus that increases your overall return on funds.\nAll referral bonuses are automatically applied to your returns.\n
 <b>Bonus Breakdown:</b>\n
 <b>1 - 5 referrals:</b> +<b>0.25%</b> per referral\n
 <b>6 - 10 referrals:</b> +<b>0.1%</b> per referral\n
@@ -979,7 +978,7 @@ All referral bonuses are automatically applied to your returns./n
         let totalPercentage = 0;
 
         if (totalReferrals > 0) {
-            message += '<b>Your referrals:</b>\n';
+            message += '<b>Your referrals:</b>\n\n';
 
             referralsResult.rows.forEach((referral, index) => {
                 let percentageAdded = 0;
@@ -1008,7 +1007,7 @@ All referral bonuses are automatically applied to your returns./n
 
         // If the user has no referral code (`ref_code_invited_by` is empty), add a message encouraging them to add one
         if (!refCodeInvitedBy) {
-            message += `\n<b>Enter a valid referral code and get x2 percent in your referrals!</b>`;
+            message += `\n<b>Enter a valid referral code to double your referral bonus percentage.</b>`;
         }
 
         // Define the inline keyboard (buttons)
