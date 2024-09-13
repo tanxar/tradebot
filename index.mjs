@@ -1003,7 +1003,7 @@ By inviting others to use this bot, you earn a bonus that increases your overall
         }
 
         // Adding the total percentage at the bottom
-        message += `\nTotal percentage added: ${totalPercentage.toFixed(2)}%\n`;
+        message += `\n<b>Total</b> percentage added: ${totalPercentage.toFixed(2)}%\n`;
 
         // If the user has no referral code (`ref_code_invited_by` is empty), add a message encouraging them to add one
         if (!refCodeInvitedBy) {
@@ -1101,7 +1101,7 @@ async function handleReferralCodeResponse(chatId, text) {
 
     try {
         // Validate the entered referral code (ensure it exists in the database)
-        const refCodeQuery = 'SELECT telegram_id, ref_code_invite_others FROM users WHERE ref_code_invite_others = $1';
+        const refCodeQuery = 'SELECT telegram_id FROM users WHERE ref_code_invite_others = $1';
         const refCodeResult = await client.query(refCodeQuery, [text]);
 
         // If referral code is not found
@@ -1122,20 +1122,27 @@ async function handleReferralCodeResponse(chatId, text) {
         const updateQuery = 'UPDATE users SET ref_code_invited_by = $1 WHERE telegram_id = $2';
         await client.query(updateQuery, [text, String(userId)]);
 
-        // Notify the user of the successful update
-        await sendMessage(chatId, "Referral code successfully added! You will now receive x2 referral bonuses.");
+        // Send success message
+        const successMessage = await sendMessage(chatId, "Referral code successfully added! You will now receive x2 referral bonuses.");
 
-        // Clear the session after successful operation
-        delete userSessions[chatId];
+        // Wait 1 second, then edit the message to "Restarting bot..."
+        setTimeout(async () => {
+            await editMessage(chatId, successMessage.result.message_id, "Restarting bot...");
 
-        // Optionally, redirect the user back to the referral view
-        await handleReferrals(chatId, userId, null);
+            // Wait another 1 second, then delete the message and restart the bot
+            setTimeout(async () => {
+                await deleteMessage(chatId, successMessage.result.message_id); // Delete the message
+                delete userSessions[chatId]; // Clear session
+                await restartBot(chatId, userId); // Restart the bot
+            }, 1000); // Wait 1 second before deleting the message and restarting the bot
+        }, 1000); // Wait 1 second before editing the message
 
     } catch (error) {
         console.error(`Error processing referral code: ${error.message}`);
         await sendMessage(chatId, "An error occurred while processing your referral code. Please try again.");
     }
 }
+
 
 
 
