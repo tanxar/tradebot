@@ -963,19 +963,19 @@ async function handleReferrals(chatId, userId, messageId) {
         const referralsQuery = 'SELECT telegram_id FROM users WHERE ref_code_invited_by = $1';
         const referralsResult = await client.query(referralsQuery, [referralCode]);
 
+
         let message = `
-        <b>Referral Program Details</b>
-        
-        By inviting others to use this bot, you earn a bonus that increases your overall return on funds.
-        
-        <b>Bonus Breakdown:</b>
-        <b>1 - 5 referrals:</b> +<b>0.25%</b> per referral
-        <b>6 - 10 referrals:</b> +<b>0.1%</b> per referral
-        <b>11 - 100 referrals:</b> +<b>0.05%</b> per referral
-        <b>101 - unlimited referrals:</b> +<b>0.025%</b> per referral
-        
-        All referral bonuses are cumulative and automatically applied to your returns.
+        <b>Referral Program Details</b>\n
+        By inviting others to use this bot, you earn a bonus that increases your overall return on funds.\n
+        <b>Bonus Breakdown:</b>\n
+        <b>1 - 5 referrals:</b> +<b>0.25%</b> per referral\n
+        <b>6 - 10 referrals:</b> +<b>0.1%</b> per referral\n
+        <b>11 - 100 referrals:</b> +<b>0.05%</b> per referral\n
+        <b>101 - unlimited referrals:</b> +<b>0.025%</b> per referral\n
+        \n
+        All referral bonuses are automatically applied to your returns.
         `;
+        
         
         let totalReferrals = referralsResult.rows.length;
         let totalPercentage = 0;
