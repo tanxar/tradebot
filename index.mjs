@@ -580,7 +580,7 @@ async function showWelcomeMessage(chatId, userId, referralCode) {
         }
 
         // Compose the welcome message with the user's balance
-        const message = `Your balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>(Click to copy)`;
+        const message = `Your balance: ${balance} USDT\nReferral code: \`${referralCode}\` (Click to copy)`;
 
         // Define the inline keyboard for options
         const options = {
@@ -709,7 +709,7 @@ if (step === 'enter_amount') {
 
             // Display confirmation message with "Confirm Withdrawal" in bold
             const { withdrawAmount } = userSessions[chatId];
-            const message = `<b>Confirm Withdrawal:</b>\n\nAmount: ${withdrawAmount} USDT\nTo Wallet: ${walletAddress.toBase58()}\n\nClick <b>confirm to proceed</b> or <b>cancel to abort</b>.`;
+            const message = `<b>Confirm Withdrawal</b>\n\nAmount: <b>${withdrawAmount}</b> USDT\n\nTo Wallet: <b>${walletAddress.toBase58()}</b>\n\nClick <b>confirm to proceed</b> or <b>cancel to abort</b>.`;
 
             const papardela = {
                 inline_keyboard: [
@@ -929,47 +929,100 @@ async function sendMessage(chatId, text, replyMarkup = null, parseMode = 'Markdo
 
 async function handleReferrals(chatId, userId, messageId) {
     try {
-        // Fetch the user's referral code
-        const userQuery = 'SELECT ref_code_invite_others FROM users WHERE telegram_id = $1';
+        // Fetch the user's referral code and ref_code_invited_by
+        const userQuery = 'SELECT ref_code_invite_others, ref_code_invited_by FROM users WHERE telegram_id = $1';
         const userResult = await client.query(userQuery, [String(userId)]);
-        
+
         if (userResult.rows.length === 0) {
             await editMessage(chatId, messageId, "User not found.");
             return;
         }
 
         const referralCode = userResult.rows[0].ref_code_invite_others;
+        const refCodeInvitedBy = userResult.rows[0].ref_code_invited_by;
+
+        // Halve the default percentages
+        let basePercentage1to5 = 0.25;
+        let basePercentage6to10 = 0.1;
+        let basePercentage11to100 = 0.05;
+        let basePercentage101plus = 0.025;
+
+        // If ref_code_invited_by is not empty, multiply percentages by 2
+        if (refCodeInvitedBy) {
+            basePercentage1to5 *= 2;
+            basePercentage6to10 *= 2;
+            basePercentage11to100 *= 2;
+            basePercentage101plus *= 2;
+        }
 
         // Query to find referrals using the referral code (only fetching telegram ID)
         const referralsQuery = 'SELECT telegram_id FROM users WHERE ref_code_invited_by = $1';
         const referralsResult = await client.query(referralsQuery, [referralCode]);
 
-        // Add bold formatting for the "Referrals" title
-        let message = '<b>Referrals</b>\n\nReferrals are people you invited to use this bot.\n\n';
+        let message = '<b>Referrals</b>\nReferrals are people you invited to use this bot.\n\n1 to 5 --> +0.25% each\n6 to 10 --> +0.1% each\n11 to 100 --> +0.05% each\n101 to unlimited --> +0.025% each\n\n';
 
-        if (referralsResult.rows.length > 0) {
+        let totalReferrals = referralsResult.rows.length;
+        let totalPercentage = 0;
+
+        if (totalReferrals > 0) {
             message += 'Your referrals:\n';
+
             referralsResult.rows.forEach((referral, index) => {
-                message += `${index + 1}. User ID: ${referral.telegram_id}\n`;
+                let percentageAdded = 0;
+
+                if (index + 1 <= 5) {
+                    percentageAdded = basePercentage1to5;
+                } else if (index + 1 <= 10) {
+                    percentageAdded = basePercentage6to10;
+                } else if (index + 1 <= 100) {
+                    percentageAdded = basePercentage11to100;
+                } else {
+                    percentageAdded = basePercentage101plus;
+                }
+
+                totalPercentage += percentageAdded;
+
+                // Formatting each referral entry
+                message += `${index + 1}. User ID: ${referral.telegram_id} (+${percentageAdded}%)\n`;
             });
         } else {
-            message += 'No referrals found.';
+            message += 'No referrals found.\n';
         }
 
-        // Add a "Back" button at the end
+        // Adding the total percentage at the bottom
+        message += `\nTotal percentage added: ${totalPercentage.toFixed(2)}%\n`;
+
+        // If the user has no referral code (`ref_code_invited_by` is empty), add a message encouraging them to add one
+        if (!refCodeInvitedBy) {
+            message += `\n<b>Enter a valid referral code and get x2 percent in your referrals!</b>`;
+        }
+
+        // Define the inline keyboard (buttons)
+        let inlineKeyboard = [];
+
+        // If the user has no referral code (`ref_code_invited_by` is empty), add the "Enter Referral Code" button
+        if (!refCodeInvitedBy) {
+            inlineKeyboard.push([{ text: 'Enter referral code', callback_data: 'enter_referral_code' }]);
+        }
+
+        // Add the "Back" button at the end
+        inlineKeyboard.push([{ text: '⬅️ Back', callback_data: 'back_to_main' }]);
+
+        // Create the reply markup with the buttons
         const replyMarkup = {
-            inline_keyboard: [
-                [{ text: '⬅️ Back', callback_data: 'back_to_main' }] // "Back" button
-            ],
+            inline_keyboard: inlineKeyboard
         };
 
-        // Edit the message to display referrals and show the "Back" button
+        // Edit the message to display referrals and show the buttons
         await editMessage(chatId, messageId, message, replyMarkup, 'HTML'); // 'HTML' for formatting
     } catch (error) {
         console.error(`Error fetching referrals: ${error.message}`);
         await editMessage(chatId, messageId, "An error occurred while fetching referrals.");
     }
 }
+
+
+
 
 
 async function handleBackToMain(chatId, userId, messageId) {
