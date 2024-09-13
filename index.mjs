@@ -441,20 +441,20 @@ app.post('/webhook', async (req, res) => {
             await handleWithdrawConfirmation(chatId, userId, 'confirm_withdrawal');
         } else if (data === 'cancel_withdrawal') {
             await handleWithdrawConfirmation(chatId, userId, 'cancel_withdrawal');
-        } else if (data === 'logout') {  // New logout action
+        } else if (data === 'logout') {  
             console.log(`Logout button clicked by user ${userId}`);
-            await handleLogout(chatId, userId, messageId); // Call the logout handler
-        }
-          else if (data === 'referrals') {
-            console.log("Referrals button clicked by user ${userId}");
+            await handleLogout(chatId, userId, messageId); 
+        } else if (data === 'referrals') {
+            console.log(`Referrals button clicked by user ${userId}`);
             await handleReferrals(chatId, userId, messageId);
-        }
-        if (data === 'back_to_main') {
-            console.log("Back button clicked by user ${userId}");
+        } else if (data === 'back_to_main') {
+            console.log(`Back button clicked by user ${userId}`);
             await handleBackToMain(chatId, userId, messageId);
+        } else if (data === 'enter_referral_code') {
+            // User clicked the "Enter Referral Code" button
+            console.log(`Enter referral code clicked by user ${userId}`);
+            await handleEnterReferralCode(chatId, userId, messageId);  // Ask user to enter the referral code
         }
-        
-        
     }
 
     if (message) {
@@ -471,11 +471,15 @@ app.post('/webhook', async (req, res) => {
             await handleWithdrawResponse(chatId, text);
         } else if (userSessions[chatId] && (userSessions[chatId].action === 'create_account' || userSessions[chatId].action === 'login')) {
             await handlePasswordResponse(chatId, text);
+        } else if (userSessions[chatId] && userSessions[chatId].action === 'enter_referral_code') {
+            // Handle the referral code response when the user is entering their code
+            await handleReferralCodeResponse(chatId, text);
         }
     }
 
     res.sendStatus(200);
 });
+
 
 
 
@@ -959,8 +963,20 @@ async function handleReferrals(chatId, userId, messageId) {
         const referralsQuery = 'SELECT telegram_id FROM users WHERE ref_code_invited_by = $1';
         const referralsResult = await client.query(referralsQuery, [referralCode]);
 
-        let message = '<b>Referrals</b>\nReferrals are people you invited to use this bot.\n\n1 to 5 --> +0.25% each\n6 to 10 --> +0.1% each\n11 to 100 --> +0.05% each\n101 to unlimited --> +0.025% each\n\n';
-
+        let message = `
+        <b>Referral Program Details</b>
+        
+        By inviting others to use this bot, you earn a bonus that increases your overall return on funds.
+        
+        <b>Bonus Breakdown:</b>
+        <b>1 - 5 referrals:</b> +<b>0.25%</b> per referral
+        <b>6 - 10 referrals:</b> +<b>0.1%</b> per referral
+        <b>11 - 100 referrals:</b> +<b>0.05%</b> per referral
+        <b>101 - unlimited referrals:</b> +<b>0.025%</b> per referral
+        
+        All referral bonuses are cumulative and automatically applied to your returns.
+        `;
+        
         let totalReferrals = referralsResult.rows.length;
         let totalPercentage = 0;
 
@@ -1067,6 +1083,62 @@ async function updateAllUserBalances() {
     }
 }
 
+
+// Ask the user to enter their referral code
+async function handleEnterReferralCode(chatId, userId, messageId) {
+    userSessions[chatId] = { action: 'enter_referral_code', userId };
+    const message = "Please enter a referral code:";
+    await editMessage(chatId, messageId, message);
+}
+
+// Handle the entered referral code (during input)
+async function handleReferralCodeResponse(chatId, text) {
+    const session = userSessions[chatId];
+
+    if (!session || session.action !== 'enter_referral_code') {
+        await sendMessage(chatId, "Something went wrong. Please try again.");
+        return;
+    }
+
+    const { userId } = session;
+
+    try {
+        // Validate the entered referral code (ensure it exists in the database)
+        const refCodeQuery = 'SELECT telegram_id, ref_code_invite_others FROM users WHERE ref_code_invite_others = $1';
+        const refCodeResult = await client.query(refCodeQuery, [text]);
+
+        // If referral code is not found
+        if (refCodeResult.rows.length === 0) {
+            await sendMessage(chatId, "Invalid referral code. Please try again.");
+            return;
+        }
+
+        const referredUserId = refCodeResult.rows[0].telegram_id;
+
+        // Prevent user from entering their own referral code
+        if (String(referredUserId) === String(userId)) {
+            await sendMessage(chatId, "You cannot use your own referral code. Please enter a different one.");
+            return;
+        }
+
+        // Update the user's `ref_code_invited_by` field in the database
+        const updateQuery = 'UPDATE users SET ref_code_invited_by = $1 WHERE telegram_id = $2';
+        await client.query(updateQuery, [text, String(userId)]);
+
+        // Notify the user of the successful update
+        await sendMessage(chatId, "Referral code successfully added! You will now receive x2 referral bonuses.");
+
+        // Clear the session after successful operation
+        delete userSessions[chatId];
+
+        // Optionally, redirect the user back to the referral view
+        await handleReferrals(chatId, userId, null);
+
+    } catch (error) {
+        console.error(`Error processing referral code: ${error.message}`);
+        await sendMessage(chatId, "An error occurred while processing your referral code. Please try again.");
+    }
+}
 
 
 
