@@ -580,7 +580,7 @@ async function showWelcomeMessage(chatId, userId, referralCode) {
         }
 
         // Compose the welcome message with the user's balance
-        const message = `Your balance: ${balance} USDT\nReferral code: \`${referralCode}\` (Click to copy)`;
+        const message = `Your balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>(Click to copy)`;
 
         // Define the inline keyboard for options
         const options = {
