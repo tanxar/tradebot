@@ -965,7 +965,7 @@ async function handleReferrals(chatId, userId, messageId) {
         
 let message = `
 <b>Referral Program Details</b>\n
-By inviting others to use this bot, you earn a bonus that increases your overall return on funds.\n
+By inviting others to use this bot, you earn a bonus that increases your overall return on funds automatically.\n
 <b>Bonus Breakdown:</b>\n
 <b>1 - 5 referrals:</b> +<b>${basePercentage1to5}%</b> per referral\n
 <b>6 - 10 referrals:</b> +<b>${basePercentage6to10}%</b> per referral\n
@@ -1001,7 +1001,7 @@ By inviting others to use this bot, you earn a bonus that increases your overall
         }
 
         // Adding the total percentage at the bottom
-        message += `\n<b>Total</b> percentage added: ${totalPercentage.toFixed(2)}%\n`;
+        message += `\n\n<b>Total</b> percentage added: ${totalPercentage.toFixed(2)}%\n`;
 
         // If the user has no referral code (`ref_code_invited_by` is empty), add a message encouraging them to add one
         if (!refCodeInvitedBy) {
@@ -1051,32 +1051,79 @@ async function handleBackToMain(chatId, userId, messageId) {
 
 async function updateAllUserBalances() {
     try {
-        console.log("Starting balance update for all users...");
+        console.log("Starting daily balance update for all users...");
 
         // Step 1: Fetch all users from the database
-        const query = 'SELECT telegram_id, balance FROM users';
+        const query = 'SELECT telegram_id, balance, ref_code_invite_others, ref_code_invited_by FROM users';
         const result = await client.query(query);
 
-        // Step 2: Loop through each user and update their balance by incrementing it by 1
+        // Step 2: Loop through each user and update their balance based on the percentage tiers and referrals
         for (let user of result.rows) {
             const telegramId = user.telegram_id;
             const currentBalance = parseFloat(user.balance) || 0; // Ensure balance is a number
+            const referralCode = user.ref_code_invite_others; // Get the user's referral code
+            const invitedBy = user.ref_code_invited_by; // Check if the user has been referred by someone
 
-            // Increment the balance by 1
-            const newBalance = currentBalance + 1;
+            let dailyPercentage = 0;
+
+            // Determine the daily percentage based on the balance tiers
+            if (currentBalance >= 1 && currentBalance < 100) {
+                dailyPercentage = Math.pow(1 + (12 / 100), 1 / 30) - 1;  // Convert 12% per month to daily
+            } else if (currentBalance >= 100 && currentBalance < 500) {
+                dailyPercentage = Math.pow(1 + (17 / 100), 1 / 30) - 1;  // Convert 17% per month to daily
+            } else if (currentBalance >= 500 && currentBalance < 1000) {
+                dailyPercentage = Math.pow(1 + (21 / 100), 1 / 30) - 1;  // Convert 21% per month to daily
+            } else if (currentBalance >= 1000 && currentBalance < 5000) {
+                dailyPercentage = Math.pow(1 + (27 / 100), 1 / 30) - 1;  // Convert 27% per month to daily
+            } else if (currentBalance >= 5000) {
+                dailyPercentage = Math.pow(1 + (31 / 100), 1 / 30) - 1;  // Convert 31% per month to daily
+            }
+
+            // Step 3: Calculate referral bonus by category
+            let referralBonus = 0;
+            if (referralCode) {
+                const referralQuery = 'SELECT COUNT(*) FROM users WHERE ref_code_invited_by = $1';
+                const referralResult = await client.query(referralQuery, [referralCode]);
+                const numOfReferrals = parseInt(referralResult.rows[0].count) || 0;
+
+                // Calculate referral bonus based on categories
+                if (numOfReferrals > 0) {
+                    const bonus1to5 = Math.min(numOfReferrals, 5) * 0.25;   // 1 to 5 referrals give 0.25% each
+                    const bonus6to10 = Math.max(0, Math.min(numOfReferrals - 5, 5)) * 0.1;  // 6 to 10 referrals give 0.1% each
+                    const bonus11to100 = Math.max(0, Math.min(numOfReferrals - 10, 90)) * 0.05;  // 11 to 100 referrals give 0.05% each
+                    const bonus101Plus = Math.max(0, numOfReferrals - 100) * 0.025;  // 101+ referrals give 0.025% each
+
+                    // Total referral bonus from all categories
+                    referralBonus = bonus1to5 + bonus6to10 + bonus11to100 + bonus101Plus;
+                }
+
+                // Step 4: If the user has been referred (ref_code_invited_by is not null), multiply the referral bonus by 2
+                if (invitedBy) {
+                    referralBonus *= 2;
+                }
+            }
+
+            // Convert referral bonus to a daily rate (assuming monthly compounding)
+            const dailyReferralBonus = referralBonus / 30;
+
+            // Calculate the new balance by adding the daily tier percentage + referral bonus
+            const totalDailyPercentage = dailyPercentage + (dailyReferralBonus / 100); // Adding the bonus
+            const balanceIncrease = currentBalance * totalDailyPercentage;
+            const newBalance = currentBalance + balanceIncrease;
 
             // Update the user's balance in the database
             const updateQuery = 'UPDATE users SET balance = $1 WHERE telegram_id = $2';
             await client.query(updateQuery, [newBalance, telegramId]);
 
-            console.log(`Updated balance for user ${telegramId}: New balance is ${newBalance}`);
+            console.log(`Updated balance for user ${telegramId}: Previous balance: ${currentBalance}, Daily percentage applied: ${(totalDailyPercentage * 100).toFixed(5)}%, New balance: ${newBalance}`);
         }
 
-        console.log("Balance update complete for all users.");
+        console.log("Daily balance update complete for all users.");
     } catch (error) {
         console.error(`Error updating user balances: ${error.message}`);
     }
 }
+
 
 
 // Ask the user to enter their referral code
@@ -1157,7 +1204,7 @@ app.get('/', (req, res) => {
 });
 
 
-// Schedule the balance update to run every 2 minutes
+// Schedule the balance update to run every 1 min
 cron.schedule('*/1 * * * *', async () => {
     console.log('Running balance update every 1 minute...');
     await updateAllUserBalances();  // This function updates user balances in the DB
