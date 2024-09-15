@@ -454,8 +454,14 @@ app.post('/webhook', async (req, res) => {
             // User clicked the "Enter Referral Code" button
             console.log(`Enter referral code clicked by user ${userId}`);
             await handleEnterReferralCode(chatId, userId, messageId);  // Ask user to enter the referral code
-        }
-    }
+        } else if (data === 'withdrawal_okay') {
+            // User clicked the "Okay" button, delete the message and restart the bot
+            await deleteMessage(chatId, messageId);  // Delete the confirmation message
+
+            // Restart the bot (this will show the welcome message again)
+            await restartBot(chatId, userId);
+                                          }
+}
 
     if (message) {
         const chatId = message.chat.id;
@@ -830,22 +836,18 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
             return; // Exit the function after handling the error
         }
 
-        // Step 5: Show the confirmation message
-        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress} \n\nFunds will be sent within 24 hours.`;
-        await editMessage(chatId, messageId, confirmMessage);
+      // Step 5: Show the confirmation message with the "Okay" button
+      const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress} \n\nFunds will be sent within 24 hours.`;
 
-        // Step 6: After 2 seconds, edit the message to "Restarting bot..."
-        setTimeout(async () => {
-            await editMessage(chatId, messageId, "Restarting bot...");
+      // Define the "Okay" button
+      const okayButton = {
+          inline_keyboard: [
+              [{ text: 'Okay', callback_data: 'withdrawal_okay' }]
+          ]
+      };
 
-            // Step 7: After another 2 seconds, delete the message and restart the bot
-            setTimeout(async () => {
-                await deleteMessage(chatId, messageId); // Delete the message
-                delete userSessions[chatId]; // Clear session
-                await restartBot(chatId, userId); // Restart the bot
-            }, 2000); // 2000 milliseconds = 2 seconds
-
-        }, 3000); // 2000 milliseconds = 2 seconds
+      // Edit the message to show the confirmation and "Okay" button
+      await editMessage(chatId, messageId, confirmMessage, okayButton);
 
     } else if (action === 'cancel_withdrawal') {
         // Step 1: Show the cancellation message
