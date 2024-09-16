@@ -66,7 +66,6 @@ async function fundNewWallet(newWalletPublicKey) {
         console.log(`Funding wallet balance: ${balance} lamports`);
 
         if (balance < solanaWeb3.LAMPORTS_PER_SOL * 0.0022) {
-            // throw new Error('Insufficient balance to fund the new wallet.');
              console.log('WARNING: Insufficient balance to fund the new wallet.');
 
         }
@@ -76,7 +75,7 @@ async function fundNewWallet(newWalletPublicKey) {
         
         // If the account contains any data, it's likely not a system (SOL) account
         if (fromAccountInfo && fromAccountInfo.data.length > 0) {
-            throw new Error('From account must be a native SOL account and must not carry any data.');
+            console.log('Error: From account must be a native SOL account and must not carry any data.');
         }
 
         // Create the transaction to send SOL
@@ -101,7 +100,7 @@ async function fundNewWallet(newWalletPublicKey) {
         console.log("Transaction Simulation Result:", simulationResult);
 
         if (simulationResult.value.err) {
-            throw new Error('Transaction simulation failed');
+            console.log('Error: Transaction simulation failed');
         }
 
         // Send the transaction and confirm it
@@ -475,17 +474,17 @@ app.post('/webhook', async (req, res) => {
             await showInitialOptions(chatId, userId, firstName);
         }
         // Handle the /restart command 
-        else if (text === '/restart') {
-            console.log(`Restart command received from user ${userId}`);
+        // else if (text === '/restart') {
+        //     console.log(`Restart command received from user ${userId}`);
 
-            // Delete any existing session for the user (if exists)
-            delete userSessions[chatId];  // Clearing the user session if any
+        //     // Delete any existing session for the user (if exists)
+        //     delete userSessions[chatId];  // Clearing the user session if any
 
-            // Restart the bot by showing the initial options or welcome message
-            await restartBot(chatId, userId);
+        //     // Restart the bot by showing the initial options or welcome message
+        //     await restartBot(chatId, userId);
 
-            return res.sendStatus(200); // Send the success response
-        }
+        //     return res.sendStatus(200); // Send the success response
+        // }
         
         else if (userSessions[chatId] && userSessions[chatId].action === 'withdraw') {
             // Check if user is in the middle of the withdraw process
@@ -505,14 +504,28 @@ app.post('/webhook', async (req, res) => {
 
 
 
-// Show initial options to the user (Create Account and Login buttons)
 async function showInitialOptions(chatId, userId, firstName) {
     const userExists = await checkUserExists(userId);
     let options;
 
+    // First, send an image
+    const imageOptions = {
+        chat_id: chatId,
+        photo: 'https://your-hosted-image-url.https://upload.wikimedia.org/wikipedia/commons/a/ab/Gallet_clamshell_600x600_movement.jpg/image.jpg',  // Replace with the actual image URL or file_id
+        caption: "Automated Trading Bot",
+    };
+
+    // Send the image
+    await fetch(`https://api.telegram.org/bot${TOKEN}/sendPhoto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(imageOptions),
+    });
+
+    // Then, send the text and buttons
     if (userExists) {
-        const message = `Welcome to CryptoGrowth bot.\n\nThis bot uses strategies on the Solana network to generate returns on USDT deposits. Offering up to 30%(aprox.) monthly gains, it allows users to manage their investments and benefit from referral rewards. Secure and transparent, designed for steady growth.        
-        \n\nAccount ID: ${userId}\n\n`;
+        const message = `This bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. Operating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.
+        \n\nAccount ID: ${userId}\n\n `;
         options = {
             chat_id: chatId,
             text: message,
@@ -523,7 +536,7 @@ async function showInitialOptions(chatId, userId, firstName) {
             },
         };
     } else {
-        const message = "Welcome! Please choose an option:";
+        const message = "This bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. Operating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.\n\n ";
         options = {
             chat_id: chatId,
             text: message,
@@ -541,6 +554,7 @@ async function showInitialOptions(chatId, userId, firstName) {
         body: JSON.stringify(options),
     });
 }
+
 
 // Function to get user by Telegram ID
 async function getUserByTelegramId(telegramId) {
@@ -605,7 +619,7 @@ async function showWelcomeMessage(chatId, userId, referralCode) {
         }
 
         // Compose the welcome message with the user's balance
-        const message = `Your balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>(Click to copy)`;
+        const message = `Your balance: ${balance} USDT\nReferral code: <code>${referralCode}</code> (click to copy)`;
 
         // Define the inline keyboard for options
         const options = {
