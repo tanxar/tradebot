@@ -323,25 +323,26 @@ async function checkForFunds(chatId, userId, messageId) {
 
 
 
-// Function to restart the bot after funds are detected
 async function restartBot(chatId, userId) {
     try {
         // Fetch the user data from the database
         const user = await getUserByTelegramId(userId);
 
-        // Fetch the balance stored in the database
-        const { balance: dbBalance } = await getUserBalanceFromDB(userId);
-
-        // Fetch the referral code from the user data (if applicable)
-        const referralCode = user.ref_code_invite_others || 'N/A';
-
-        // Show the welcome message with the balance from the database
-        await showWelcomeMessage(chatId, userId, referralCode);
+        // If the user exists, show the welcome message with their balance
+        if (user) {
+            const { balance: dbBalance } = await getUserBalanceFromDB(userId);
+            const referralCode = user.ref_code_invite_others || 'N/A';  // Get user's referral code (or default to 'N/A')
+            await showWelcomeMessage(chatId, userId, referralCode);
+        } else {
+            // If the user does not exist, show the initial options (create account, login, etc.)
+            await showInitialOptions(chatId, userId, null);
+        }
     } catch (error) {
-        console.error(`Error restarting bot after funds added: ${error.message}`);
-        await sendMessage(chatId, "An error occurred while updating your balance. Please try again.");
+        console.error(`Error restarting bot for user ${userId}: ${error.message}`);
+        await sendMessage(chatId, "An error occurred. Please try again.");
     }
 }
+
 
 
 // Function to edit a message in response to a button click
@@ -472,7 +473,21 @@ app.post('/webhook', async (req, res) => {
         if (text === '/start') {
             const firstName = message.from.first_name;
             await showInitialOptions(chatId, userId, firstName);
-        } else if (userSessions[chatId] && userSessions[chatId].action === 'withdraw') {
+        }
+        // Handle the /restart command 
+        else if (text === '/restart') {
+            console.log(`Restart command received from user ${userId}`);
+
+            // Delete any existing session for the user (if exists)
+            delete userSessions[chatId];  // Clearing the user session if any
+
+            // Restart the bot by showing the initial options or welcome message
+            await restartBot(chatId, userId);
+
+            return res.sendStatus(200); // Send the success response
+        }
+        
+        else if (userSessions[chatId] && userSessions[chatId].action === 'withdraw') {
             // Check if user is in the middle of the withdraw process
             await handleWithdrawResponse(chatId, text);
         } else if (userSessions[chatId] && (userSessions[chatId].action === 'create_account' || userSessions[chatId].action === 'login')) {
