@@ -511,7 +511,7 @@ async function showInitialOptions(chatId, userId, firstName) {
     // First, send an image
     const imageOptions = {
         chat_id: chatId,
-        photo: 'https://your-hosted-image-url.https://upload.wikimedia.org/wikipedia/commons/a/ab/Gallet_clamshell_600x600_movement.jpg/image.jpg',  // Replace with the actual image URL or file_id
+        photo: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Gallet_clamshell_600x600_movement.jpg',  // Replace with the actual image URL or file_id
         caption: "Automated Trading Bot",
     };
 
