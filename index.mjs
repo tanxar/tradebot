@@ -508,52 +508,32 @@ async function showInitialOptions(chatId, userId, firstName) {
     const userExists = await checkUserExists(userId);
     let options;
 
-    // First, send an image
-    const imageOptions = {
+    // Define the image message with inline buttons
+    const imageMessage = {
         chat_id: chatId,
         photo: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Gallet_clamshell_600x600_movement.jpg',  // Replace with the actual image URL or file_id
-        caption: "Automated Trading Bot",
+        caption: userExists
+            ? `This bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. Operating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.\n\nAccount ID: ${userId}`
+            : `This bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. Operating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.`,
+        reply_markup: {
+            inline_keyboard: userExists
+                ? [
+                    [{ text: "Login", callback_data: "login" }],
+                ]
+                : [
+                    [{ text: "Create Account", callback_data: "create_account" }],
+                ],
+        },
     };
 
-    // Send the image
+    // Send the image with caption and buttons
     await fetch(`https://api.telegram.org/bot${TOKEN}/sendPhoto`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(imageOptions),
-    });
-
-    // Then, send the text and buttons
-    if (userExists) {
-        const message = `This bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. Operating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.
-        \n\nAccount ID: ${userId}\n\n `;
-        options = {
-            chat_id: chatId,
-            text: message,
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: "Login", callback_data: "login" }],
-                ],
-            },
-        };
-    } else {
-        const message = "This bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. Operating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.\n\n ";
-        options = {
-            chat_id: chatId,
-            text: message,
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: "Create Account", callback_data: "create_account" }],
-                ],
-            },
-        };
-    }
-
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
+        body: JSON.stringify(imageMessage),
     });
 }
+
 
 
 // Function to get user by Telegram ID
