@@ -511,10 +511,10 @@ async function showInitialOptions(chatId, userId, firstName) {
     // Define the image message with inline buttons
     const imageMessage = {
         chat_id: chatId,
-        photo: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Gallet_clamshell_600x600_movement.jpg',  // Replace with the actual image URL or file_id
+        photo: 'https://i.postimg.cc/9Fv1R5ZX/mi4.png',  // Replace with the actual image URL or file_id
         caption: userExists
-            ? `This bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. Operating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.\n\nAccount ID: ${userId}`
-            : `This bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. Operating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.`,
+            ? `Welcome to Phantom Tradebot, \n\nThis bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. \n\nOperating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.\n\nAccount ID: ${userId}`
+            : `Welcome to Phantom Tradebot, \n\nThis bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. \n\nOperating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.`,
         reply_markup: {
             inline_keyboard: userExists
                 ? [
