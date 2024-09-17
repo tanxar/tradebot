@@ -62,13 +62,13 @@ async function fundNewWallet(newWalletPublicKey) {
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
 
         // Check balance of the Phantom wallet (myKeypair)
-        const balance = await connection.getBalance(myKeypair.publicKey);
-        console.log(`Funding wallet balance: ${balance} lamports`);
+        // const balance = await connection.getBalance(myKeypair.publicKey);
+        // console.log(`Funding wallet balance: ${balance} lamports`);
 
-        if (balance < solanaWeb3.LAMPORTS_PER_SOL * 0.0022) {
-             console.log('WARNING: Insufficient balance to fund the new wallet.');
+        // if (balance < solanaWeb3.LAMPORTS_PER_SOL * 0.0022) {
+        //      console.log('WARNING: Insufficient balance to fund the new wallet.');
 
-        }
+        // }
 
         // Get the account info to make sure it's a system account
         const fromAccountInfo = await connection.getAccountInfo(myKeypair.publicKey);
