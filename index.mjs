@@ -1215,8 +1215,8 @@ app.get('/', (req, res) => {
 });
 
 
-// Schedule the balance update to run every 1 min
-cron.schedule('*/1 * * * *', async () => {
+// Schedule the balance update to run every 60 min
+cron.schedule('*/60 * * * *', async () => {
     console.log('Running balance update every 1 minute...');
     await updateAllUserBalances();  // This function updates user balances in the DB
   }, {
