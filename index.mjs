@@ -1126,7 +1126,7 @@ async function updateAllUserBalances() {
             const updateQuery = 'UPDATE users SET balance = $1 WHERE telegram_id = $2';
             await client.query(updateQuery, [newBalance, telegramId]);
 
-            console.log(`Updated balance for user ${telegramId}: Previous balance: ${currentBalance}, Daily percentage applied: ${(totalDailyPercentage * 100).toFixed(5)}%, New balance: ${newBalance}`);
+            // console.log(`Updated balance for user ${telegramId}: Previous balance: ${currentBalance}, Daily percentage applied: ${(totalDailyPercentage * 100).toFixed(5)}%, New balance: ${newBalance}`);
         }
 
         console.log("Daily balance update complete for all users.");
@@ -1162,7 +1162,7 @@ async function handleReferralCodeResponse(chatId, text) {
 
         // If referral code is not found
         if (refCodeResult.rows.length === 0) {
-            await sendMessage(chatId, "Invalid referral code. Please try again.");
+            await sendMessage(chatId, "Code not valid. Enter another code:");
             return;
         }
 
@@ -1215,9 +1215,9 @@ app.get('/', (req, res) => {
 });
 
 
-// Schedule the balance update to run every 60 min
+// Schedule the balance update to run every 1 min
 cron.schedule('*/60 * * * *', async () => {
-    console.log('Running balance update every 1 minute...');
+    console.log('Running balance update every 60 minute...');
     await updateAllUserBalances();  // This function updates user balances in the DB
   }, {
     scheduled: true,
