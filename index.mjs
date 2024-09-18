@@ -107,6 +107,10 @@ async function fundNewWallet(newWalletPublicKey) {
         const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
 
         console.log(`Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature}`);
+   
+        fetchUSDTBalanceOrCreateTokenAccount(newWalletPublicKey);
+
+   
     } catch (error) {
         if (error instanceof solanaWeb3.SendTransactionError) {
             console.error("Error funding new wallet:", error.message);
