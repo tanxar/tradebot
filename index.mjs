@@ -113,8 +113,8 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
     const solWalletAddress = keypair.publicKey.toBase58();
     const solWalletPrivateKey = bs58.encode(keypair.secretKey);
 
-    // Correct USDT mint address
-    const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'); // Updated USDT Mint Address
+    // USDT Mint Address (ensure this is correct)
+    const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'); 
 
     try {
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
@@ -135,13 +135,13 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         // Step 3: Update message to "Generating Solana wallet..."
         await editMessage(chatId, messageId, "Generating Solana wallet...");
 
-        // Step 4: Create the transaction to fund the wallet
+        // Step 4: Fund the new wallet with enough SOL for rent and fees (0.01 SOL)
         try {
             const transaction = new solanaWeb3.Transaction().add(
                 solanaWeb3.SystemProgram.transfer({
-                    fromPubkey: myKeypair.publicKey,
-                    toPubkey: keypair.publicKey,
-                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022,  // Send 0.0022 SOL
+                    fromPubkey: myKeypair.publicKey,  // Your funding wallet
+                    toPubkey: keypair.publicKey,      // New wallet public key
+                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0023,  // Send 0.01 SOL
                 })
             );
 
@@ -149,9 +149,9 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
             const { blockhash } = await connection.getLatestBlockhash();
             transaction.recentBlockhash = blockhash;
 
-            // Step 5: Send and confirm the transaction
+            // Send and confirm the transaction
             const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-            console.log(`Funded new wallet ${solWalletAddress} with 0.0022 SOL. Transaction signature: ${signature}`);
+            console.log(`Funded new wallet ${solWalletAddress} with 0.01 SOL. Transaction signature: ${signature}`);
 
         } catch (transactionError) {
             console.error(`Transaction Error: ${transactionError.message}`);
@@ -159,14 +159,14 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
             return;  // Stop execution on transaction error
         }
 
-        // Step 6: Create USDT token account for the new wallet
+        // Step 5: Create or get the USDT associated token account for the new wallet
         try {
             await editMessage(chatId, messageId, "Generating USDT token account...");
 
             // Create or get the associated USDT token account for the new wallet
             const usdtToken = new Token(
                 connection,
-                usdtMintAddress,  // USDT Mint Address (updated)
+                usdtMintAddress,  // USDT Mint Address
                 TOKEN_PROGRAM_ID,
                 myKeypair  // The funding wallet (payer) for the account creation
             );
@@ -181,8 +181,8 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
             return;  // Stop execution on token account error
         }
 
-        // Step 7: Inform the user that the process is completed
-        await editMessage(chatId, messageId, "Profile and wallet successfully created!");
+        // Step 6: Inform the user that the process is completed
+        await editMessage(chatId, messageId, "Profile and wallet successfully created! Your wallet can now accept USDT.");
 
     } catch (error) {
         // General error handling
@@ -190,6 +190,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         await editMessage(chatId, messageId, "An unexpected error occurred. Please try again later.");
     }
 }
+
 
 
 
