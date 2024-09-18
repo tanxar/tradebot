@@ -141,7 +141,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
                 solanaWeb3.SystemProgram.transfer({
                     fromPubkey: myKeypair.publicKey,  // Your funding wallet (myKeypair)
                     toPubkey: keypair.publicKey,      // New wallet public key (solWalletAddress)
-                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.035,  // Send 0.01 SOL
+                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0035,  // Send 0.01 SOL
                 })
             );
 
