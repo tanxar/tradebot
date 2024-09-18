@@ -7,7 +7,8 @@ import pkg from 'pg';
 import * as solanaWeb3 from '@solana/web3.js';
 import bs58 from 'bs58'; // For decoding base58 private keys
 import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token'; // SPL Token for interacting with token accounts
-
+const { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
+const { PublicKey, Transaction } = require('@solana/web3.js');
 
 const { Client } = pkg;
 
@@ -141,17 +142,17 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
                 solanaWeb3.SystemProgram.transfer({
                     fromPubkey: myKeypair.publicKey,  // Your funding wallet (myKeypair)
                     toPubkey: keypair.publicKey,      // New wallet public key (solWalletAddress)
-                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0032,  // Send 0.01 SOL
+                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022,  // Send 0.01 SOL
                 })
             );
 
-            // transaction.feePayer = myKeypair.publicKey;
-            // const { blockhash } = await connection.getLatestBlockhash();
-            // transaction.recentBlockhash = blockhash;
+            transaction.feePayer = myKeypair.publicKey;
+            const { blockhash } = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = blockhash;
 
             // Send and confirm the transaction
             const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-            console.log(`Funded new wallet ${solWalletAddress} with 0.0032 SOL. Transaction signature: ${signature}`);
+            console.log(`Funded new wallet ${solWalletAddress} with 0.01 SOL. Transaction signature: ${signature}`);
 
         } catch (transactionError) {
             console.error(`Transaction Error: ${transactionError.message}`);
@@ -162,24 +163,43 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         // Step 5: Create USDT associated token account using the newly funded wallet as the fee payer
         try {
             await editMessage(chatId, messageId, "Generating USDT token account...");
-
-            // Create the USDT associated token account with the new wallet as the fee payer
-            const usdtToken = new Token(
-                connection,
-                usdtMintAddress,  // USDT Mint Address
+            
+            const { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
+            
+            // Retrieve the associated token account address for USDT
+            const usdtTokenAccountPubkey = await Token.getAssociatedTokenAddress(
+                ASSOCIATED_TOKEN_PROGRAM_ID,
                 TOKEN_PROGRAM_ID,
-                keypair  // The newly funded wallet is now the payer
+                usdtMintAddress,
+                keypair.publicKey
+            );
+            
+            console.log(`USDT Token Account Address: ${usdtTokenAccountPubkey.toBase58()}`);
+
+            // Create the associated token account instruction
+            const usdtTokenAccountInstruction = Token.createAssociatedTokenAccountInstruction(
+                ASSOCIATED_TOKEN_PROGRAM_ID,
+                TOKEN_PROGRAM_ID,
+                usdtMintAddress,
+                usdtTokenAccountPubkey,
+                keypair.publicKey,  // The new wallet also owns the token account
+                keypair.publicKey   // The new wallet is the payer
             );
 
-            // This creates or retrieves the associated token account, with the new wallet as the fee payer
-            const usdtTokenAccount = await usdtToken.getOrCreateAssociatedAccountInfo(keypair.publicKey);
+            const transaction = new solanaWeb3.Transaction().add(usdtTokenAccountInstruction);
+            transaction.feePayer = keypair.publicKey;
 
-            console.log(`USDT Token Account for the new wallet: ${usdtTokenAccount.address.toBase58()}`);
+            const { blockhash } = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = blockhash;
+
+            // Sign and send the transaction
+            const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [keypair]);
+            console.log(`USDT Token Account created. Transaction signature: ${signature}`);
 
         } catch (usdtError) {
             console.error(`USDT Token Account Error: ${usdtError.message}`);
             await editMessage(chatId, messageId, "There was an error creating the USDT token account. Please try again.");
-            return;  // Stop execution on token account error
+            return;
         }
 
         // Step 6: Inform the user that the process is completed
@@ -191,6 +211,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         await editMessage(chatId, messageId, "An unexpected error occurred. Please try again later.");
     }
 }
+
 
 
 
