@@ -6,6 +6,8 @@ import fetch from 'node-fetch';
 import pkg from 'pg';
 import * as solanaWeb3 from '@solana/web3.js';
 import bs58 from 'bs58'; // For decoding base58 private keys
+import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token'; // SPL Token for interacting with token accounts
+
 
 const { Client } = pkg;
 
@@ -188,7 +190,6 @@ async function updateUserBalanceInDB(userId, newBalance, newCheckedBalance, newT
 
 
 
-const { Token } = require('@solana/spl-token');  
 
 async function createUserAndFundWallet(telegramId, password, referralCode) {
     const keypair = solanaWeb3.Keypair.generate();  // Generate a new wallet
