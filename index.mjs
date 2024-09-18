@@ -129,7 +129,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
 
         // Step 1: Update message to "Creating your profile..."
-        await editMessage(chatId, messageId, "Creating your profile...");
+        // await editMessage(chatId, messageId, "Creating your profile...");
 
         // Insert the new user into the database (before funding)
         const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
@@ -543,24 +543,33 @@ async function handlePasswordResponse(chatId, text) {
 
     const { action, userId } = session;
 
+    // Send an initial message to the user to indicate that the process has started
+    const initialMessageResponse = await sendMessage(chatId, "Creatiing account...");
+    const messageId = initialMessageResponse.result.message_id; // Capture the messageId
+
     if (action === 'create_account') {
         const referralCode = await generateUniqueReferralCode();
+
+        // Now call the createUserAndFundWallet function with the proper messageId
         await createUserAndFundWallet(userId, text, referralCode, chatId, messageId);
+
         const user = await getUserByTelegramId(userId);
+        
+        // Show the welcome message after creating the account
         await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
-        delete userSessions[chatId];
+        delete userSessions[chatId]; // Clean up session
     } else if (action === 'login') {
         const user = await getUserByTelegramId(userId);
         if (user && user.password === text) {
             const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
-            // await updateUserBalanceInDB(userId, solanaBalance); 
             await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
-            delete userSessions[chatId];
+            delete userSessions[chatId]; // Clean up session
         } else {
             await sendMessage(chatId, "Incorrect password. Please try again.");
         }
     }
 }
+
 
 // Show welcome message after successful login or account creation
 async function showWelcomeMessage(chatId, userId, referralCode) {
