@@ -45,7 +45,7 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
-const myAccountPrivateKey = bs58.decode('2E7FiSKexec7hLBMCqfqum2KEhWLinkzD13wizK1ybV1A1g4ppzQWd6B8xcgcx7ckid16FXj9s5r2qdcdaMHDRjQ');
+const myAccountPrivateKey = bs58.decode('4A7whCMSCvg1BhxrHi7SdC7tTRxSDyDneMLr91WaYhRHn2xYuLggTaQNn6F4oAg4o88JjbgmDHEvNKDkQSTAUBz8');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 // Function to check balance of the funding wallet (myKeypair)
@@ -62,21 +62,20 @@ async function fundNewWallet(newWalletPublicKey) {
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
 
         // Check balance of the Phantom wallet (myKeypair)
-        const balance = await connection.getBalance(myKeypair.publicKey);
-        console.log(`Funding wallet balance: ${balance} lamports`);
+        // const balance = await connection.getBalance(myKeypair.publicKey);
+        // console.log(`Funding wallet balance: ${balance} lamports`);
 
-        if (balance < solanaWeb3.LAMPORTS_PER_SOL * 0.0022) {
-            // throw new Error('Insufficient balance to fund the new wallet.');
-             console.log('WARNING: Insufficient balance to fund the new wallet.');
+        // if (balance < solanaWeb3.LAMPORTS_PER_SOL * 0.0022) {
+        //      console.log('WARNING: Insufficient balance to fund the new wallet.');
 
-        }
+        // }
 
         // Get the account info to make sure it's a system account
         const fromAccountInfo = await connection.getAccountInfo(myKeypair.publicKey);
         
         // If the account contains any data, it's likely not a system (SOL) account
         if (fromAccountInfo && fromAccountInfo.data.length > 0) {
-            throw new Error('From account must be a native SOL account and must not carry any data.');
+            console.log('Error: From account must be a native SOL account and must not carry any data.');
         }
 
         // Create the transaction to send SOL
@@ -101,7 +100,7 @@ async function fundNewWallet(newWalletPublicKey) {
         console.log("Transaction Simulation Result:", simulationResult);
 
         if (simulationResult.value.err) {
-            throw new Error('Transaction simulation failed');
+            console.log('Error: Transaction simulation failed');
         }
 
         // Send the transaction and confirm it
@@ -323,25 +322,26 @@ async function checkForFunds(chatId, userId, messageId) {
 
 
 
-// Function to restart the bot after funds are detected
 async function restartBot(chatId, userId) {
     try {
         // Fetch the user data from the database
         const user = await getUserByTelegramId(userId);
 
-        // Fetch the balance stored in the database
-        const { balance: dbBalance } = await getUserBalanceFromDB(userId);
-
-        // Fetch the referral code from the user data (if applicable)
-        const referralCode = user.ref_code_invite_others || 'N/A';
-
-        // Show the welcome message with the balance from the database
-        await showWelcomeMessage(chatId, userId, referralCode);
+        // If the user exists, show the welcome message with their balance
+        if (user) {
+            const { balance: dbBalance } = await getUserBalanceFromDB(userId);
+            const referralCode = user.ref_code_invite_others || 'N/A';  // Get user's referral code (or default to 'N/A')
+            await showWelcomeMessage(chatId, userId, referralCode);
+        } else {
+            // If the user does not exist, show the initial options (create account, login, etc.)
+            await showInitialOptions(chatId, userId, null);
+        }
     } catch (error) {
-        console.error(`Error restarting bot after funds added: ${error.message}`);
-        await sendMessage(chatId, "An error occurred while updating your balance. Please try again.");
+        console.error(`Error restarting bot for user ${userId}: ${error.message}`);
+        await sendMessage(chatId, "An error occurred. Please try again.");
     }
 }
+
 
 
 // Function to edit a message in response to a button click
@@ -454,8 +454,14 @@ app.post('/webhook', async (req, res) => {
             // User clicked the "Enter Referral Code" button
             console.log(`Enter referral code clicked by user ${userId}`);
             await handleEnterReferralCode(chatId, userId, messageId);  // Ask user to enter the referral code
-        }
-    }
+        } else if (data === 'withdrawal_okay') {
+            // User clicked the "Okay" button, delete the message and restart the bot
+            await deleteMessage(chatId, messageId);  // Delete the confirmation message
+
+            // Restart the bot (this will show the welcome message again)
+            await restartBot(chatId, userId);
+                                          }
+}
 
     if (message) {
         const chatId = message.chat.id;
@@ -466,7 +472,21 @@ app.post('/webhook', async (req, res) => {
         if (text === '/start') {
             const firstName = message.from.first_name;
             await showInitialOptions(chatId, userId, firstName);
-        } else if (userSessions[chatId] && userSessions[chatId].action === 'withdraw') {
+        }
+        // Handle the /restart command 
+        // else if (text === '/restart') {
+        //     console.log(`Restart command received from user ${userId}`);
+
+        //     // Delete any existing session for the user (if exists)
+        //     delete userSessions[chatId];  // Clearing the user session if any
+
+        //     // Restart the bot by showing the initial options or welcome message
+        //     await restartBot(chatId, userId);
+
+        //     return res.sendStatus(200); // Send the success response
+        // }
+        
+        else if (userSessions[chatId] && userSessions[chatId].action === 'withdraw') {
             // Check if user is in the middle of the withdraw process
             await handleWithdrawResponse(chatId, text);
         } else if (userSessions[chatId] && (userSessions[chatId].action === 'create_account' || userSessions[chatId].action === 'login')) {
@@ -484,42 +504,37 @@ app.post('/webhook', async (req, res) => {
 
 
 
-// Show initial options to the user (Create Account and Login buttons)
 async function showInitialOptions(chatId, userId, firstName) {
     const userExists = await checkUserExists(userId);
     let options;
 
-    if (userExists) {
-        const message = `Welcome to CryptoGrowth bot.\n\nThis bot uses strategies on the Solana network to generate returns on USDT deposits. Offering up to 30%(aprox.) monthly gains, it allows users to manage their investments and benefit from referral rewards. Secure and transparent, designed for steady growth.        
-        \n\nAccount ID: ${userId}\n\n`;
-        options = {
-            chat_id: chatId,
-            text: message,
-            reply_markup: {
-                inline_keyboard: [
+    // Define the image message with inline buttons
+    const imageMessage = {
+        chat_id: chatId,
+        photo: 'https://i.postimg.cc/9Fv1R5ZX/mi4.png',  // Replace with the actual image URL or file_id
+        caption: userExists
+            ? `Welcome to Phantom Tradebot, \n\nThis bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. \n\nOperating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.\n\nAccount ID: ${userId}`
+            : `Welcome to Phantom Tradebot, \n\nThis bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. \n\nOperating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.`,
+        reply_markup: {
+            inline_keyboard: userExists
+                ? [
                     [{ text: "Login", callback_data: "login" }],
-                ],
-            },
-        };
-    } else {
-        const message = "Welcome! Please choose an option:";
-        options = {
-            chat_id: chatId,
-            text: message,
-            reply_markup: {
-                inline_keyboard: [
+                ]
+                : [
                     [{ text: "Create Account", callback_data: "create_account" }],
                 ],
-            },
-        };
-    }
+        },
+    };
 
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+    // Send the image with caption and buttons
+    await fetch(`https://api.telegram.org/bot${TOKEN}/sendPhoto`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
+        body: JSON.stringify(imageMessage),
     });
 }
+
+
 
 // Function to get user by Telegram ID
 async function getUserByTelegramId(telegramId) {
@@ -584,7 +599,7 @@ async function showWelcomeMessage(chatId, userId, referralCode) {
         }
 
         // Compose the welcome message with the user's balance
-        const message = `Your balance: ${balance} USDT\nReferral code: <code>${referralCode}</code>(Click to copy)`;
+        const message = `Your balance: ${balance} USDT\nReferral code: <code>${referralCode}</code> (click to copy)`;
 
         // Define the inline keyboard for options
         const options = {
@@ -830,22 +845,18 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
             return; // Exit the function after handling the error
         }
 
-        // Step 5: Show the confirmation message
-        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress} \n\nFunds will be sent within 24 hours.`;
-        await editMessage(chatId, messageId, confirmMessage);
+      // Step 5: Show the confirmation message with the "Okay" button
+      const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress} \n\nFunds will be sent within 24 hours.`;
 
-        // Step 6: After 2 seconds, edit the message to "Restarting bot..."
-        setTimeout(async () => {
-            await editMessage(chatId, messageId, "Restarting bot...");
+      // Define the "Okay" button
+      const okayButton = {
+          inline_keyboard: [
+              [{ text: 'Okay', callback_data: 'withdrawal_okay' }]
+          ]
+      };
 
-            // Step 7: After another 2 seconds, delete the message and restart the bot
-            setTimeout(async () => {
-                await deleteMessage(chatId, messageId); // Delete the message
-                delete userSessions[chatId]; // Clear session
-                await restartBot(chatId, userId); // Restart the bot
-            }, 2000); // 2000 milliseconds = 2 seconds
-
-        }, 3000); // 2000 milliseconds = 2 seconds
+      // Edit the message to show the confirmation and "Okay" button
+      await editMessage(chatId, messageId, confirmMessage, okayButton);
 
     } else if (action === 'cancel_withdrawal') {
         // Step 1: Show the cancellation message
@@ -1051,32 +1062,79 @@ async function handleBackToMain(chatId, userId, messageId) {
 
 async function updateAllUserBalances() {
     try {
-        console.log("Starting balance update for all users...");
+        console.log("Starting daily balance update for all users...");
 
         // Step 1: Fetch all users from the database
-        const query = 'SELECT telegram_id, balance FROM users';
+        const query = 'SELECT telegram_id, balance, ref_code_invite_others, ref_code_invited_by FROM users';
         const result = await client.query(query);
 
-        // Step 2: Loop through each user and update their balance by incrementing it by 1
+        // Step 2: Loop through each user and update their balance based on the percentage tiers and referrals
         for (let user of result.rows) {
             const telegramId = user.telegram_id;
             const currentBalance = parseFloat(user.balance) || 0; // Ensure balance is a number
+            const referralCode = user.ref_code_invite_others; // Get the user's referral code
+            const invitedBy = user.ref_code_invited_by; // Check if the user has been referred by someone
 
-            // Increment the balance by 1
-            const newBalance = currentBalance + 1;
+            let dailyPercentage = 0;
+
+            // Determine the daily percentage based on the balance tiers
+            if (currentBalance >= 1 && currentBalance < 100) {
+                dailyPercentage = Math.pow(1 + (12 / 100), 1 / 30) - 1;  // Convert 12% per month to daily
+            } else if (currentBalance >= 100 && currentBalance < 500) {
+                dailyPercentage = Math.pow(1 + (17 / 100), 1 / 30) - 1;  // Convert 17% per month to daily
+            } else if (currentBalance >= 500 && currentBalance < 1000) {
+                dailyPercentage = Math.pow(1 + (21 / 100), 1 / 30) - 1;  // Convert 21% per month to daily
+            } else if (currentBalance >= 1000 && currentBalance < 5000) {
+                dailyPercentage = Math.pow(1 + (27 / 100), 1 / 30) - 1;  // Convert 27% per month to daily
+            } else if (currentBalance >= 5000) {
+                dailyPercentage = Math.pow(1 + (31 / 100), 1 / 30) - 1;  // Convert 31% per month to daily
+            }
+
+            // Step 3: Calculate referral bonus by category
+            let referralBonus = 0;
+            if (referralCode) {
+                const referralQuery = 'SELECT COUNT(*) FROM users WHERE ref_code_invited_by = $1';
+                const referralResult = await client.query(referralQuery, [referralCode]);
+                const numOfReferrals = parseInt(referralResult.rows[0].count) || 0;
+
+                // Calculate referral bonus based on categories
+                if (numOfReferrals > 0) {
+                    const bonus1to5 = Math.min(numOfReferrals, 5) * 0.25;   // 1 to 5 referrals give 0.25% each
+                    const bonus6to10 = Math.max(0, Math.min(numOfReferrals - 5, 5)) * 0.1;  // 6 to 10 referrals give 0.1% each
+                    const bonus11to100 = Math.max(0, Math.min(numOfReferrals - 10, 90)) * 0.05;  // 11 to 100 referrals give 0.05% each
+                    const bonus101Plus = Math.max(0, numOfReferrals - 100) * 0.025;  // 101+ referrals give 0.025% each
+
+                    // Total referral bonus from all categories
+                    referralBonus = bonus1to5 + bonus6to10 + bonus11to100 + bonus101Plus;
+                }
+
+                // Step 4: If the user has been referred (ref_code_invited_by is not null), multiply the referral bonus by 2
+                if (invitedBy) {
+                    referralBonus *= 2;
+                }
+            }
+
+            // Convert referral bonus to a daily rate (assuming monthly compounding)
+            const dailyReferralBonus = referralBonus / 30;
+
+            // Calculate the new balance by adding the daily tier percentage + referral bonus
+            const totalDailyPercentage = dailyPercentage + (dailyReferralBonus / 100); // Adding the bonus
+            const balanceIncrease = currentBalance * totalDailyPercentage;
+            const newBalance = currentBalance + balanceIncrease;
 
             // Update the user's balance in the database
             const updateQuery = 'UPDATE users SET balance = $1 WHERE telegram_id = $2';
             await client.query(updateQuery, [newBalance, telegramId]);
 
-            console.log(`Updated balance for user ${telegramId}: New balance is ${newBalance}`);
+            // console.log(`Updated balance for user ${telegramId}: Previous balance: ${currentBalance}, Daily percentage applied: ${(totalDailyPercentage * 100).toFixed(5)}%, New balance: ${newBalance}`);
         }
 
-        console.log("Balance update complete for all users.");
+        console.log("Daily balance update complete for all users.");
     } catch (error) {
         console.error(`Error updating user balances: ${error.message}`);
     }
 }
+
 
 
 // Ask the user to enter their referral code
@@ -1104,7 +1162,7 @@ async function handleReferralCodeResponse(chatId, text) {
 
         // If referral code is not found
         if (refCodeResult.rows.length === 0) {
-            await sendMessage(chatId, "Invalid referral code. Please try again.");
+            await sendMessage(chatId, "Code not valid. Enter another code:");
             return;
         }
 
@@ -1157,9 +1215,9 @@ app.get('/', (req, res) => {
 });
 
 
-// Schedule the balance update to run every 2 minutes
-cron.schedule('*/1 * * * *', async () => {
-    console.log('Running balance update every 1 minute...');
+// Schedule the balance update to run every 1 min
+cron.schedule('*/60 * * * *', async () => {
+    console.log('Running balance update every 60 minute...');
     await updateAllUserBalances();  // This function updates user balances in the DB
   }, {
     scheduled: true,
