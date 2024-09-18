@@ -175,16 +175,16 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         await editMessage(chatId, messageId, "Profile and wallet successfully created.");
 
     } catch (error) {
-        if (error instanceof solanaWeb3.SendTransactionError) {
-            console.error("Error funding new wallet:", error.message);
-            console.log("Logs:", error.logs);
-        } else {
-            console.error(`General Error: ${error.message}`);
-        }
-        // Step 5: If an error occurs, notify the user
-        await editMessage(chatId, messageId, "An error occurred while creating your profile.");
+        console.error(`Error occurred: ${error.message}`);
+        
+        // Step 5: Notify the user about the error
+        await editMessage(chatId, messageId, "There was an error creating your account. Please try again later.");
+        
+        // Stop further execution by returning here
+        return;
     }
 }
+
 
 
 
