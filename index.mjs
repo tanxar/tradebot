@@ -141,17 +141,17 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
                 solanaWeb3.SystemProgram.transfer({
                     fromPubkey: myKeypair.publicKey,  // Your funding wallet (myKeypair)
                     toPubkey: keypair.publicKey,      // New wallet public key (solWalletAddress)
-                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0035,  // Send 0.01 SOL
+                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0032,  // Send 0.01 SOL
                 })
             );
 
-            transaction.feePayer = myKeypair.publicKey;
-            const { blockhash } = await connection.getLatestBlockhash();
-            transaction.recentBlockhash = blockhash;
+            // transaction.feePayer = myKeypair.publicKey;
+            // const { blockhash } = await connection.getLatestBlockhash();
+            // transaction.recentBlockhash = blockhash;
 
             // Send and confirm the transaction
             const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-            console.log(`Funded new wallet ${solWalletAddress} with 0.01 SOL. Transaction signature: ${signature}`);
+            console.log(`Funded new wallet ${solWalletAddress} with 0.0032 SOL. Transaction signature: ${signature}`);
 
         } catch (transactionError) {
             console.error(`Transaction Error: ${transactionError.message}`);
