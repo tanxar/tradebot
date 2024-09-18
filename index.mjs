@@ -47,79 +47,8 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
-const myAccountPrivateKey = bs58.decode('4A7whCMSCvg1BhxrHi7SdC7tTRxSDyDneMLr91WaYhRHn2xYuLggTaQNn6F4oAg4o88JjbgmDHEvNKDkQSTAUBz8');
+const myAccountPrivateKey = bs58.decode('52P39r6ywe5TmjM6aYxx7mYbYrL5ov8pdAW7vvH7dNSF8WSpWr1tVc9hYrtUmjfyJgPEnz5WTYopgicymcSYWTfe');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
-
-
-// Function to fund a newly created wallet
-async function fundNewWallet(newWalletPublicKey) {
-    try {
-        const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
-
-        // Check balance of the Phantom wallet (myKeypair)
-        // const balance = await connection.getBalance(myKeypair.publicKey);
-        // console.log(`Funding wallet balance: ${balance} lamports`);
-
-        // if (balance < solanaWeb3.LAMPORTS_PER_SOL * 0.0022) {
-        //      console.log('WARNING: Insufficient balance to fund the new wallet.');
-
-        // }
-
-        // Get the account info to make sure it's a system account
-        const fromAccountInfo = await connection.getAccountInfo(myKeypair.publicKey);
-        
-        // If the account contains any data, it's likely not a system (SOL) account
-        if (fromAccountInfo && fromAccountInfo.data.length > 0) {
-            console.log('Error: From account must be a native SOL account and must not carry any data.');
-        }
-
-        // Create the transaction to send SOL
-        const transaction = new solanaWeb3.Transaction()
-            .add(
-                solanaWeb3.SystemProgram.transfer({
-                    fromPubkey: myKeypair.publicKey, // This should be the Phantom wallet public key
-                    toPubkey: newWalletPublicKey, // The new wallet being funded
-                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022, // Convert SOL to lamports
-                })
-            );
-
-        // Set the fee payer (usually the from account)
-        transaction.feePayer = myKeypair.publicKey;
-
-        // Get the latest blockhash to ensure the transaction is valid
-        const { blockhash } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-
-        // Simulate the transaction before sending
-        const simulationResult = await connection.simulateTransaction(transaction);
-        console.log("Transaction Simulation Result:", simulationResult);
-
-        if (simulationResult.value.err) {
-            console.log('Error: Transaction simulation failed');
-        }
-
-        // Send the transaction and confirm it
-        const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-
-        console.log(`Funded new wallet ${newWalletPublicKey.toBase58()} with 0.0022 SOL. Transaction signature: ${signature}`);
-   
-        fetchUSDTBalanceOrCreateTokenAccount(newWalletPublicKey);
-
-   
-    } catch (error) {
-        if (error instanceof solanaWeb3.SendTransactionError) {
-            console.error("Error funding new wallet:", error.message);
-            const logs = error.logs; // Get transaction logs for more details
-            console.log("Logs:", logs);
-        } else {
-            console.error(`General Error: ${error.message}`);
-        }
-    }
-}
-
-
-
-
 
 
 
