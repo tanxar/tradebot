@@ -239,7 +239,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode) {
         await client.query(query, [String(telegramId), password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
 
         // Step 3: Create USDT token account for the new wallet
-        const usdtMintAddress = new solanaWeb3.PublicKey('YourUSDTTokenMintAddressHere');  // Replace with actual USDT mint address
+        const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');  // Replace with actual USDT mint address
 
         // Create associated token account for the new wallet to receive USDT
         const usdtTokenAccount = await Token.getOrCreateAssociatedTokenAccount(
