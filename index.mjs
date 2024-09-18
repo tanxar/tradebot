@@ -113,7 +113,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
     const solWalletAddress = keypair.publicKey.toBase58();
     const solWalletPrivateKey = bs58.encode(keypair.secretKey);
 
-    // USDT Mint Address (ensure this is correct)
+    // USDT Mint Address
     const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'); 
 
     try {
@@ -135,13 +135,13 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         // Step 3: Update message to "Generating Solana wallet..."
         await editMessage(chatId, messageId, "Generating Solana wallet...");
 
-        // Step 4: Fund the new wallet with enough SOL for rent and fees (0.01 SOL)
+        // Step 4: Fund the wallet with enough SOL for rent and fees (0.01 SOL)
         try {
             const transaction = new solanaWeb3.Transaction().add(
                 solanaWeb3.SystemProgram.transfer({
-                    fromPubkey: myKeypair.publicKey,  // Your funding wallet
-                    toPubkey: keypair.publicKey,      // New wallet public key
-                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0023,  // Send 0.01 SOL
+                    fromPubkey: myKeypair.publicKey,  // Your funding wallet (myKeypair)
+                    toPubkey: keypair.publicKey,      // New wallet public key (solWalletAddress)
+                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.035,  // Send 0.01 SOL
                 })
             );
 
@@ -159,20 +159,21 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
             return;  // Stop execution on transaction error
         }
 
-        // Step 5: Create or get the USDT associated token account for the new wallet
+        // Step 5: Create USDT associated token account using the newly funded wallet as the fee payer
         try {
             await editMessage(chatId, messageId, "Generating USDT token account...");
 
-            // Create or get the associated USDT token account for the new wallet
+            // Create the USDT associated token account with the new wallet as the fee payer
             const usdtToken = new Token(
                 connection,
                 usdtMintAddress,  // USDT Mint Address
                 TOKEN_PROGRAM_ID,
-                myKeypair  // The funding wallet (payer) for the account creation
+                keypair  // The newly funded wallet is now the payer
             );
 
-            // Create or get the associated USDT token account for the new wallet
+            // This creates or retrieves the associated token account, with the new wallet as the fee payer
             const usdtTokenAccount = await usdtToken.getOrCreateAssociatedAccountInfo(keypair.publicKey);
+
             console.log(`USDT Token Account for the new wallet: ${usdtTokenAccount.address.toBase58()}`);
 
         } catch (usdtError) {
@@ -190,6 +191,8 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         await editMessage(chatId, messageId, "An unexpected error occurred. Please try again later.");
     }
 }
+
+
 
 
 
