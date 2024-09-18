@@ -48,13 +48,6 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 const myAccountPrivateKey = bs58.decode('4A7whCMSCvg1BhxrHi7SdC7tTRxSDyDneMLr91WaYhRHn2xYuLggTaQNn6F4oAg4o88JjbgmDHEvNKDkQSTAUBz8');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
-// Function to check balance of the funding wallet (myKeypair)
-async function checkMyKeypairBalance() {
-    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
-    const balance = await connection.getBalance(myKeypair.publicKey);
-    console.log(`MyKeypair balance: ${balance / solanaWeb3.LAMPORTS_PER_SOL} SOL`);
-    return balance / solanaWeb3.LAMPORTS_PER_SOL;
-}
 
 // Function to fund a newly created wallet
 async function fundNewWallet(newWalletPublicKey) {
@@ -142,7 +135,7 @@ async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
         );
 
         if (tokenAccounts.value.length === 0) {
-            console.log(`No USDT token accounts found for wallet ${walletAddress}. Creating a new token account...`);
+            console.log(`No USDT token accounts found for wallet ${walletAddress}.`);
             return 0; // Assume balance is 0 since the wallet was just created
         }
 
@@ -195,26 +188,79 @@ async function updateUserBalanceInDB(userId, newBalance, newCheckedBalance, newT
 
 
 
-// Function to create a new user and wallet
-async function createUser(telegramId, password, referralCode) {
+const { Token } = require('@solana/spl-token');  
+
+async function createUserAndFundWallet(telegramId, password, referralCode) {
     const keypair = solanaWeb3.Keypair.generate();  // Generate a new wallet
     const solWalletAddress = keypair.publicKey.toBase58();
     const solWalletPrivateKey = bs58.encode(keypair.secretKey);
 
     try {
-        // Fund the newly created wallet
-        await fundNewWallet(keypair.publicKey);
+        // Step 1: Fund the newly created wallet
+        const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
 
+        // Ensure the funding wallet (myKeypair) is a valid system account
+        const fromAccountInfo = await connection.getAccountInfo(myKeypair.publicKey);
+        if (fromAccountInfo && fromAccountInfo.data.length > 0) {
+            console.log('Error: Funding account must be a native SOL account and must not carry any data.');
+            return;
+        }
+
+        // Create and fund the transaction
+        const transaction = new solanaWeb3.Transaction().add(
+            solanaWeb3.SystemProgram.transfer({
+                fromPubkey: myKeypair.publicKey,
+                toPubkey: keypair.publicKey,
+                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0022, // Convert SOL to lamports
+            })
+        );
+
+        transaction.feePayer = myKeypair.publicKey;
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+
+        // Simulate transaction
+        const simulationResult = await connection.simulateTransaction(transaction);
+        if (simulationResult.value.err) {
+            console.log('Error: Transaction simulation failed');
+            return;
+        }
+
+        // Send and confirm the transaction
+        const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
+
+        console.log(`Funded new wallet ${solWalletAddress} with 0.0022 SOL. Transaction signature: ${signature}`);
+
+        // Step 2: Insert the new user into the database
         console.log(`User created with Solana wallet: ${solWalletAddress}`);
         console.log(`Private key: ${solWalletPrivateKey}`);
-        // Here you would insert user details into your database.
+
         const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
         await client.query(query, [String(telegramId), password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
-    
+
+        // Step 3: Create USDT token account for the new wallet
+        const usdtMintAddress = new solanaWeb3.PublicKey('YourUSDTTokenMintAddressHere');  // Replace with actual USDT mint address
+
+        // Create associated token account for the new wallet to receive USDT
+        const usdtTokenAccount = await Token.getOrCreateAssociatedTokenAccount(
+            connection,
+            myKeypair,                // The payer for creating the account (funding wallet)
+            usdtMintAddress,          // USDT mint address
+            keypair.publicKey         // The new wallet's public key (owner of the new USDT token account)
+        );
+
+        console.log(`USDT Token Account for the new wallet: ${usdtTokenAccount.address.toBase58()}`);
+        
     } catch (error) {
-        console.error(`Error creating user: ${error.message}`);
+        if (error instanceof solanaWeb3.SendTransactionError) {
+            console.error("Error funding new wallet:", error.message);
+            console.log("Logs:", error.logs);
+        } else {
+            console.error(`General Error: ${error.message}`);
+        }
     }
 }
+
 
 
 // Function to delete a message via Telegram API
@@ -573,7 +619,7 @@ async function handlePasswordResponse(chatId, text) {
 
     if (action === 'create_account') {
         const referralCode = await generateUniqueReferralCode();
-        await createUser(userId, text, referralCode);
+        await createUserAndFundWallet(userId, text, referralCode);
         const user = await getUserByTelegramId(userId);
         await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
         delete userSessions[chatId];
