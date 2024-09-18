@@ -47,7 +47,7 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
-const myAccountPrivateKey = bs58.decode('52P39r6ywe5TmjM6aYxx7mYbYrL5ov8pdAW7vvH7dNSF8WSpWr1tVc9hYrtUmjfyJgPEnz5WTYopgicymcSYWTfe');
+const myAccountPrivateKey = bs58.decode('4khUi69xnVdwpzvob2bTcgXg9D37BUDSMWFpJvcUGP2bxjGJRaKcM6bxphDz1EGXXJmgPbC8Eo5UtK5gjrbU8hNH');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
@@ -102,18 +102,6 @@ async function getUserBalanceFromDB(userId) {
     }
 }
 
-// Function to update user's balance and last checked balance in the database
-async function updateUserBalanceInDB(userId, newBalance, newCheckedBalance, newTotalFundsSent) {
-    console.log(`Updating with values: userId: ${userId}, balance: ${newBalance}, lastCheckedBalance: ${newCheckedBalance}, totalFundsSent: ${newTotalFundsSent}`);
-
-    try {
-        const query = 'UPDATE users SET balance = $1, last_checked_balance = $2, total_funds_sent = $3 WHERE telegram_id = $4';
-        await client.query(query, [newBalance, newCheckedBalance, newTotalFundsSent, userId]);
-        console.log(`Updated user ${userId}'s balance to ${newBalance}, last checked balance to ${newCheckedBalance}, and total funds sent to ${newTotalFundsSent}.`);
-    } catch (error) {
-        console.error(`Error updating user balance in DB: ${error.message}`);
-    }
-}
 
 
 
