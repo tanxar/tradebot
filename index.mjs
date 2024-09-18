@@ -6,8 +6,8 @@ import fetch from 'node-fetch';
 import pkg from 'pg';
 import * as solanaWeb3 from '@solana/web3.js';
 import bs58 from 'bs58'; // For decoding base58 private keys
-const { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
-const { PublicKey, Transaction } = require('@solana/web3.js');
+const { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } = import('@solana/spl-token');
+const { PublicKey, Transaction } = import('@solana/web3.js');
 
 const { Client } = pkg;
 
