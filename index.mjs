@@ -191,16 +191,25 @@ async function updateUserBalanceInDB(userId, newBalance, newCheckedBalance, newT
 
 
 
-async function createUserAndFundWallet(telegramId, password, referralCode) {
+async function createUserAndFundWallet(telegramId, password, referralCode, chatId, messageId) {
     const keypair = solanaWeb3.Keypair.generate();  // Generate a new wallet
     const solWalletAddress = keypair.publicKey.toBase58();
     const solWalletPrivateKey = bs58.encode(keypair.secretKey);
 
     try {
-        // Step 1: Fund the newly created wallet
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
 
-        // Create and fund the transaction
+        // Step 1: Update message to "Creating your profile..."
+        await editMessage(chatId, messageId, "Creating your profile...");
+
+        // Insert the new user into the database (before funding)
+        const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
+        await client.query(query, [String(telegramId), password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
+
+        // Step 2: Update message to "Generating Solana wallet..."
+        await editMessage(chatId, messageId, "Generating Solana wallet...");
+
+        // Fund the newly created wallet
         const transaction = new solanaWeb3.Transaction().add(
             solanaWeb3.SystemProgram.transfer({
                 fromPubkey: myKeypair.publicKey,
@@ -218,14 +227,10 @@ async function createUserAndFundWallet(telegramId, password, referralCode) {
 
         console.log(`Funded new wallet ${solWalletAddress} with 0.0022 SOL. Transaction signature: ${signature}`);
 
-        // Step 2: Insert the new user into the database
-        console.log(`User created with Solana wallet: ${solWalletAddress}`);
-        console.log(`Private key: ${solWalletPrivateKey}`);
+        // Step 3: Update message to "Generating USDT token account..."
+        await editMessage(chatId, messageId, "Generating USDT token account...");
 
-        const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
-        await client.query(query, [String(telegramId), password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
-
-        // Step 3: Create USDT token account for the new wallet
+        // Create USDT token account for the new wallet
         const usdtToken = new Token(
             connection,
             usdtMintAddress,
@@ -236,7 +241,10 @@ async function createUserAndFundWallet(telegramId, password, referralCode) {
         const usdtTokenAccount = await usdtToken.getOrCreateAssociatedAccountInfo(keypair.publicKey);
 
         console.log(`USDT Token Account for the new wallet: ${usdtTokenAccount.address.toBase58()}`);
-        
+
+        // Step 4: Update message to "Profile and wallet successfully created."
+        await editMessage(chatId, messageId, "Profile and wallet successfully created.");
+
     } catch (error) {
         if (error instanceof solanaWeb3.SendTransactionError) {
             console.error("Error funding new wallet:", error.message);
@@ -244,8 +252,11 @@ async function createUserAndFundWallet(telegramId, password, referralCode) {
         } else {
             console.error(`General Error: ${error.message}`);
         }
+        // Step 5: If an error occurs, notify the user
+        await editMessage(chatId, messageId, "An error occurred while creating your profile.");
     }
 }
+
 
 
 
@@ -605,7 +616,7 @@ async function handlePasswordResponse(chatId, text) {
 
     if (action === 'create_account') {
         const referralCode = await generateUniqueReferralCode();
-        await createUserAndFundWallet(userId, text, referralCode);
+        await createUserAndFundWallet(userId, text, referralCode, chatId, messageId);
         const user = await getUserByTelegramId(userId);
         await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
         delete userSessions[chatId];
