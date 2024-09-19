@@ -43,11 +43,11 @@ fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
 let userSessions = {};
 
 // USDT Mint Address on Solana
-const usdtMintAddress = new solanaWeb3.PublicKey('5p1UkGQTYCrpRLWx9aWriGWSvTnHEyGYYwQYTKZnCcjveS9Qdy5DThwvaNF6KnoiYR2bXaNiXwHgEn3wtBWxbZrV');
+const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
 
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
-const myAccountPrivateKey = bs58.decode('dfgdfsggfd');
+const myAccountPrivateKey = bs58.decode('3DfSK7GHurPRhd53eqr91ucjGUkaNUf5118V3GogBAbypj1rqA2q81Tm5t9XG85hiy2YXkUvXaKUhsVjK6zqVNFk');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
