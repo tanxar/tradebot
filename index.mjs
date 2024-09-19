@@ -204,11 +204,11 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         // Notify the user of the error
         await editMessage(chatId, messageId, "There was an error creating your profile. Please try again later.");
 
-        setTimeout(async () => {
-            await deleteMessage(chatId, messageId);
-        }, 2000); 
-        
-        showInitialOptions(chatId, userId)
+        // setTimeout(async () => {
+        //     await deleteMessage(chatId, messageId);
+        // }, 2000); 
+
+        // showInitialOptions(chatId, userId)
     }
 }
 
