@@ -547,8 +547,8 @@ async function showInitialOptions(chatId, userId, firstName) {
         chat_id: chatId,
         photo: 'https://i.postimg.cc/9Fv1R5ZX/mi4.png',  // Replace with the actual image URL or file_id
         caption: userExists
-            ? `Welcome to Phantom Tradebot, \n\nThis bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. \n\nOperating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.\n\nAccount ID: ${userId}`
-            : `Welcome to Phantom Tradebot, \n\nThis bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. \n\nOperating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.`,
+            ? `Welcome to Phantom Tradebot. \n\nThis bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. \n\nOperating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.\n\nAccount ID: ${userId}`
+            : `Welcome to Phantom Tradebot. \n\nThis bot automatically replicates the trading strategies of high-performing traders, executing trades in real-time with the goal of optimizing returns. \n\nOperating with minimal user interaction, the bot charges a commission solely on the profits it generates for users, ensuring an alignment of interests between the system’s performance and your financial outcome.`,
         reply_markup: {
             inline_keyboard: userExists
                 ? [
@@ -624,7 +624,7 @@ async function handlePasswordResponse(chatId, text) {
             await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
             delete userSessions[chatId]; // Clean up session
         } else {
-            await sendMessage(chatId, "Incorrect password. Please try again.");
+            await sendMessage(chatId, "Incorrect password. Please try again:");
         }
     }
 }
@@ -693,7 +693,7 @@ async function handleWithdraw(chatId, userId, messageId) {
     };
 
     // Ask the user to enter the withdrawal amount
-    const message = `Your balance: ${balance} USDT\n\nEnter withdraw amount:`;
+    const message = `Your balance: ${balance} USDT\n\nEnter withdraw amount or write <b>cancel</b> if you want to cancel withdrawal:`;
     await editMessage(chatId, messageId, message);
 }
 
@@ -719,29 +719,38 @@ async function handleWithdrawResponse(chatId, text) {
     if (result.rows.length > 0) {
         balance = result.rows[0].balance;
     }
-    // Step 1: Enter Withdrawal Amount
-   // Step 1: Enter Withdrawal Amount
-if (step === 'enter_amount') {
-    // Replace any "," with "." to standardize the decimal separator
-    const normalizedText = text.replace(",", ".");
-    
-    // Parse the normalized text to a float
-    const amount = parseFloat(normalizedText);
 
-    if (isNaN(amount) || amount <= 0 || amount > balance) {
-        await sendMessage(chatId, "Please enter a valid withdrawal amount.");
+    // Check if the user typed "cancel" to abort the process
+    if (text.toLowerCase() === 'cancel') {
+        console.log('User requested to cancel the withdrawal process.');
+
+        // Clean up the session and redirect to the welcome message
+        delete userSessions[chatId]; // Clear the session data
+        await showWelcomeMessage(chatId, userId, 'Your referral code'); // Adjust the referral code as necessary
         return;
     }
 
-    // Update session with amount and move to the next step
-    userSessions[chatId].withdrawAmount = amount;
-    userSessions[chatId].step = 'enter_wallet_address';
+    // Step 1: Enter Withdrawal Amount
+    if (step === 'enter_amount') {
+        // Replace any "," with "." to standardize the decimal separator
+        const normalizedText = text.replace(",", ".");
+        
+        // Parse the normalized text to a float
+        const amount = parseFloat(normalizedText);
 
-    // Ask the user to enter the wallet address
-    console.log(`Amount entered: ${amount}. Asking for wallet address.`);
-    await sendMessage(chatId, "Enter solana wallet address (USDT):");
-}
+        if (isNaN(amount) || amount <= 0 || amount > balance) {
+            await sendMessage(chatId, "Please enter a valid withdrawal amount or write <b>cancel</b> if you want to cancel withdrawal:");
+            return;
+        }
 
+        // Update session with amount and move to the next step
+        userSessions[chatId].withdrawAmount = amount;
+        userSessions[chatId].step = 'enter_wallet_address';
+
+        // Ask the user to enter the wallet address
+        console.log(`Amount entered: ${amount}. Asking for wallet address.`);
+        await sendMessage(chatId, "Enter solana wallet address (USDT):");
+    }
 
     // Step 2: Enter Wallet Address
     else if (step === 'enter_wallet_address') {
@@ -793,6 +802,7 @@ if (step === 'enter_amount') {
         }
     }
 }
+
 
 
 // Function to handle withdrawal confirmation or cancellation
