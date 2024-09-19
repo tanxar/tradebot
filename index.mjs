@@ -382,20 +382,15 @@ async function askForPassword(chatId, userId, action, telegramId) {
         const query = 'SELECT * FROM users WHERE telegram_id = $1'; // Use parameterized queries to prevent SQL injection
         const values = [telegramId];
         
-        // Execute the query and return the result
-        const result = await db.query(query, values);
-          // Check the action type and send the appropriate message
-    // if (action === 'create_account') {
-
-    //     await sendMessage(chatId, "Please enter a password to create your account:");
-    // } else {
-    //     await sendMessage(chatId, "Please enter your password:");
-    // }
+        // Execute the query using client.query
+        const result = await client.query(query, values);
 
         // Check if there is a matching telegram_id in the database
         if (result.rows.length > 0) {
+            // If user exists, ask for password to login
             await sendMessage(chatId, "Enter your password:");
         } else {
+            // If user does not exist, ask for a new password to create account
             await sendMessage(chatId, "Choose a password for your new account:");
         }
     } catch (error) {
@@ -404,6 +399,7 @@ async function askForPassword(chatId, userId, action, telegramId) {
         await sendMessage(chatId, "An error occurred. Please try again later.");
     }
 }
+
 
 
 
