@@ -47,7 +47,7 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
-const myAccountPrivateKey = bs58.decode('3DfSK7GHurPRhd53eqr91ucjGUkaNUf5118V3GogBAbypj1rqA2q81Tm5t9XG85hiy2YXkUvXaKUhsVjK6zqVNFk');
+const myAccountPrivateKey = bs58.decode('Yypv6YLkYzGVQy7Rh8DkGcMYcYDCTtSsMRnV8ZsSN7CVocLgQBf64e3YgFbADkKBNU3JQp4A1bafxmfHKZ7mDwR');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
@@ -134,7 +134,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
             solanaWeb3.SystemProgram.transfer({
                 fromPubkey: myKeypair.publicKey,  // Your funding wallet (myKeypair)
                 toPubkey: keypair.publicKey,      // New wallet public key (solWalletAddress)
-                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0060,  // Send 0.006 SOL
+                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0030,  // Send 0.006 SOL
             })
         );
 
@@ -144,7 +144,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
 
         // Send and confirm the transaction
         const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-        console.log(`Funded new wallet ${solWalletAddress} with 0.0060 SOL. Transaction signature: ${signature}`);
+        console.log(`Funded new wallet ${solWalletAddress} with 0.0030 SOL. Transaction signature: ${signature}`);
 
         // Step 5: Create USDT associated token account
         await editMessage(chatId, messageId, "Generating USDT token account...");
@@ -202,7 +202,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         }
 
         // Notify the user of the error
-        await editMessage(chatId, messageId, "There was an error creating your profile. Please try again later.");
+        await editMessage(chatId, messageId, "There was an error creating your account. Please try again later.");
 
         // setTimeout(async () => {
         //     await deleteMessage(chatId, messageId);
