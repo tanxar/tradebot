@@ -47,7 +47,7 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
-const myAccountPrivateKey = bs58.decode('Yypv6YLkYzGVQy7Rh8DkGcMYcYDCTtSsMRnV8ZsSN7CVocLgQBf64e3YgFbADkKBNU3JQp4A1bafxmfHKZ7mDwR');
+const myAccountPrivateKey = bs58.decode('dfgdfsggfd');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
@@ -183,6 +183,12 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
             await deleteMessage(chatId, messageId);
         }, 2000); // 2 seconds delay before deleting the message
 
+        // Step 8: Show the welcome message only if the account creation was successful
+        const user = await getUserByTelegramId(telegramId);  // Fetch user after successful creation
+        if (user) {
+            await showWelcomeMessage(chatId, telegramId, user.ref_code_invite_others);
+        }
+
     } catch (error) {
         console.error(`Error occurred: ${error.message}`);
 
@@ -196,9 +202,12 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         }
 
         // Notify the user of the error
-        await editMessage(chatId, messageId, "There was an error creating your profile. Please try again.");
+        await editMessage(chatId, messageId, "There was an error creating your profile. Please try again later.");
+
+        // Skip showing the welcome message if there was an error
     }
 }
+
 
 
 
@@ -598,10 +607,10 @@ async function handlePasswordResponse(chatId, text) {
         // Now call the createUserAndFundWallet function with the proper messageId
         await createUserAndFundWallet(userId, text, referralCode, chatId, messageId);
 
-        const user = await getUserByTelegramId(userId);
+        // const user = await getUserByTelegramId(userId);
         
         // Show the welcome message after creating the account
-        await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
+        // await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
         delete userSessions[chatId]; // Clean up session
     } else if (action === 'login') {
         const user = await getUserByTelegramId(userId);
