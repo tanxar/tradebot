@@ -576,8 +576,8 @@ async function handlePasswordResponse(chatId, text) {
     const { action, userId } = session;
 
     // Send an initial message to the user to indicate that the process has started
-    const initialMessageResponse = await sendMessage(chatId, "Creatiing account...");
-    const messageId = initialMessageResponse.result.message_id; // Capture the messageId
+    // const initialMessageResponse = await sendMessage(chatId, "Creatiing account...");
+    // const messageId = initialMessageResponse.result.message_id; // Capture the messageId
 
     if (action === 'create_account') {
         const referralCode = await generateUniqueReferralCode();
