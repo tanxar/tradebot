@@ -21,7 +21,7 @@ const client = new Client({
 });
 client.connect()
     .then(() => console.log("Connected to PostgreSQL successfully"))
-    .catch(err => console.error("Error connecting to PostgreSQL:", err));
+    .catch(err => console.log("Error connecting to PostgreSQL:", err));
 
 // Telegram bot API token and webhook URL
 const TOKEN = '7403620437:AAHUzMiWQt_AHAZ-PwYY0spVfcCKpWFKQoE';
@@ -32,12 +32,12 @@ fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
     .then(res => res.json())
     .then(json => {
         if (!json.ok) {
-            console.error('Error setting webhook:', json.description);
+            console.log('Error setting webhook:', json.description);
         } else {
             console.log('Webhook set successfully');
         }
     })
-    .catch(err => console.error('Error setting webhook:', err));
+    .catch(err => console.log('Error setting webhook:', err));
 
 // Object to hold user sessions
 let userSessions = {};
@@ -77,7 +77,7 @@ async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
         return balance;
 
     } catch (error) {
-        console.error(`Error fetching or creating USDT token account: ${error.message}`);
+        console.log(`Error fetching or creating USDT token account: ${error.message}`);
         return 0;
     }
 }
@@ -97,7 +97,7 @@ async function getUserBalanceFromDB(userId) {
         }
         return { balance: 0, lastCheckedBalance: 0, totalFundsSent: 0 };
     } catch (error) {
-        console.error(`Error fetching user balance from DB: ${error.message}`);
+        console.log(`Error fetching user balance from DB: ${error.message}`);
         return { balance: 0, lastCheckedBalance: 0, totalFundsSent: 0 };
     }
 }
@@ -190,7 +190,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         }
 
     } catch (error) {
-        console.error(`Error occurred: ${error.message}`);
+        console.log(`Error occurred: ${error.message}`);
 
         // If any error happens, delete the partially created account from the database
         try {
@@ -198,13 +198,17 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
             await client.query(deleteQuery, [String(telegramId)]);
             console.log(`Deleted user with telegram_id ${telegramId} from the database due to error.`);
         } catch (dbError) {
-            console.error(`Error deleting user from database: ${dbError.message}`);
+            console.log(`Error deleting user from database: ${dbError.message}`);
         }
 
         // Notify the user of the error
         await editMessage(chatId, messageId, "There was an error creating your profile. Please try again later.");
 
-        // Skip showing the welcome message if there was an error
+        setTimeout(async () => {
+            await deleteMessage(chatId, messageId);
+        }, 2000); 
+        
+        showInitialOptions(chatId, userId)
     }
 }
 
@@ -317,7 +321,7 @@ async function checkForFunds(chatId, userId, messageId) {
             }, 1000); // 1000 milliseconds = 1 second
         }
     } catch (error) {
-        console.error(`Error checking for funds: ${error.message}`);
+        console.log(`Error checking for funds: ${error.message}`);
         await editMessage(chatId, messageId, "An error occurred while checking for new funds. Please try again.");
     }
 }
@@ -344,7 +348,7 @@ async function restartBot(chatId, userId) {
             await showInitialOptions(chatId, userId, null);
         }
     } catch (error) {
-        console.error(`Error restarting bot for user ${userId}: ${error.message}`);
+        console.log(`Error restarting bot for user ${userId}: ${error.message}`);
         await sendMessage(chatId, "An error occurred. Please try again.");
     }
 }
@@ -394,7 +398,7 @@ async function askForPassword(chatId, userId, action, telegramId) {
         }
     } catch (error) {
         // Log the error and notify the user
-        console.error("Error asking for password:", error);
+        console.log("Error asking for password:", error);
         await sendMessage(chatId, "An error occurred. Please try again later.");
     }
 }
@@ -662,7 +666,7 @@ async function showWelcomeMessage(chatId, userId, referralCode) {
             body: JSON.stringify(options),
         });
     } catch (error) {
-        console.error(`Error fetching balance or sending welcome message: ${error.message}`);
+        console.log(`Error fetching balance or sending welcome message: ${error.message}`);
     }
 }
 
@@ -795,7 +799,7 @@ async function handleWithdrawResponse(chatId, text) {
             }
 
         } catch (error) {
-            console.error(`Invalid wallet address entered: ${text}`);
+            console.log(`Invalid wallet address entered: ${text}`);
             await sendMessage(chatId, "Please enter a valid Solana wallet address.");
         }
     }
@@ -818,13 +822,13 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
     console.log(`Handling action: ${action}, for messageId: ${messageId}`); // Debugging log
 
     if (messageId === undefined) {
-        console.error("Error: messageId is undefined.");
+        console.log("Error: messageId is undefined.");
         return;
     }
 
     const walletAddress = session.walletAddress; // Retrieve the wallet address
     if (walletAddress === undefined) {
-        console.error("Error: Wallet address is undefined.");
+        console.log("Error: Wallet address is undefined.");
         return;
     }
 
@@ -844,7 +848,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
 
             userBalance = parseFloat(balanceResult.rows[0].balance);
         } catch (error) {
-            console.error(`Error fetching user balance: ${error.message}`);
+            console.log(`Error fetching user balance: ${error.message}`);
             await sendMessage(chatId, "An error occurred while fetching your balance.");
             return;
         }
@@ -866,7 +870,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
             await client.query(updateBalanceQuery, [updatedBalance, String(userId)]);
             console.log(`User ${userId}'s balance updated to ${updatedBalance}`);
         } catch (error) {
-            console.error(`Error updating user balance: ${error.message}`);
+            console.log(`Error updating user balance: ${error.message}`);
             await sendMessage(chatId, "An error occurred while updating your balance.");
             return;
         }
@@ -880,7 +884,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
             await client.query(query, [String(userId), withdrawAmount, walletAddress]);
             console.log(`Withdrawal request inserted into the database for user ${userId}`);
         } catch (error) {
-            console.error(`Error saving withdrawal request: ${error.message}`);
+            console.log(`Error saving withdrawal request: ${error.message}`);
             const errorMessage = "An error occurred while saving your withdrawal request. Please try again later.";
             // Step 4.1: Edit the same message with the error
             await editMessage(chatId, messageId, errorMessage);
@@ -991,7 +995,7 @@ async function sendMessage(chatId, text, replyMarkup = null, parseMode = 'Markdo
 
         return json; // Return the full response to capture messageId
     } catch (error) {
-        console.error(`Error sending message: ${error.message}`);
+        console.log(`Error sending message: ${error.message}`);
         return null;
     }
 }
@@ -1092,7 +1096,7 @@ By inviting others to use this bot, you earn a bonus that increases your overall
         // Edit the message to display referrals and show the buttons
         await editMessage(chatId, messageId, message, replyMarkup, 'HTML'); // 'HTML' for formatting
     } catch (error) {
-        console.error(`Error fetching referrals: ${error.message}`);
+        console.log(`Error fetching referrals: ${error.message}`);
         await editMessage(chatId, messageId, "An error occurred while fetching referrals.");
     }
 }
@@ -1109,7 +1113,7 @@ async function handleBackToMain(chatId, userId, messageId) {
         // Step 2: Restart the bot by showing the initial options or welcome message
         await restartBot(chatId, userId);
     } catch (error) {
-        console.error(`Error handling Back button: ${error.message}`);
+        console.log(`Error handling Back button: ${error.message}`);
         await sendMessage(chatId, "An error occurred. Please try again.");
     }
 }
@@ -1185,7 +1189,7 @@ async function updateAllUserBalances() {
 
         console.log("Daily balance update complete for all users.");
     } catch (error) {
-        console.error(`Error updating user balances: ${error.message}`);
+        console.log(`Error updating user balances: ${error.message}`);
     }
 }
 
@@ -1248,7 +1252,7 @@ async function handleReferralCodeResponse(chatId, text) {
         }, 1000); // Wait 1 second before editing the message
 
     } catch (error) {
-        console.error(`Error processing referral code: ${error.message}`);
+        console.log(`Error processing referral code: ${error.message}`);
         await sendMessage(chatId, "An error occurred while processing your referral code. Please try again.");
     }
 }
