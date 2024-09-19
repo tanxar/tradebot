@@ -535,7 +535,7 @@ async function showInitialOptions(chatId, userId, firstName) {
     };
 
     // Send the image with caption and buttons
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendPhoto`, {
+    await fetch(`https://api.telegram.org/bot${TOKENN}/sendPhoto`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(imageMessage),
