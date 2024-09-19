@@ -114,101 +114,92 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
     const solWalletPrivateKey = bs58.encode(keypair.secretKey);
 
     // USDT Mint Address
-    const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'); 
+    const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
+
+    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
 
     try {
-        const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
-
         // Step 1: Update message to "Creating your profile..."
         await editMessage(chatId, messageId, "Creating your profile...");
 
         // Step 2: Insert the new user into the database
-        try {
-            const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
-            await client.query(query, [String(telegramId), password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
-        } catch (dbError) {
-            console.error(`Database Error: ${dbError.message}`);
-            await editMessage(chatId, messageId, "There was an error saving your account details. Please try again.");
-            return;  // Stop execution on database error
-        }
+        const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
+        await client.query(query, [String(telegramId), password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
 
         // Step 3: Update message to "Generating Solana wallet..."
         await editMessage(chatId, messageId, "Generating Solana wallet...");
 
-        // Step 4: Fund the wallet with enough SOL for rent and fees (0.01 SOL)
-        try {
-            const transaction = new solanaWeb3.Transaction().add(
-                solanaWeb3.SystemProgram.transfer({
-                    fromPubkey: myKeypair.publicKey,  // Your funding wallet (myKeypair)
-                    toPubkey: keypair.publicKey,      // New wallet public key (solWalletAddress)
-                    lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0060,  // Send 0.01 SOL
-                })
-            );
+        // Step 4: Fund the wallet with enough SOL for rent and fees (0.006 SOL)
+        const transaction = new solanaWeb3.Transaction().add(
+            solanaWeb3.SystemProgram.transfer({
+                fromPubkey: myKeypair.publicKey,  // Your funding wallet (myKeypair)
+                toPubkey: keypair.publicKey,      // New wallet public key (solWalletAddress)
+                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0060,  // Send 0.006 SOL
+            })
+        );
 
-            transaction.feePayer = myKeypair.publicKey;
-            const { blockhash } = await connection.getLatestBlockhash();
-            transaction.recentBlockhash = blockhash;
+        transaction.feePayer = myKeypair.publicKey;
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
 
-            // Send and confirm the transaction
-            const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-            console.log(`Funded new wallet ${solWalletAddress} with 0.0060 SOL. Transaction signature: ${signature}`);
+        // Send and confirm the transaction
+        const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
+        console.log(`Funded new wallet ${solWalletAddress} with 0.0060 SOL. Transaction signature: ${signature}`);
 
-        } catch (transactionError) {
-            console.error(`Transaction Error: ${transactionError.message}`);
-            await editMessage(chatId, messageId, "There was an error funding your wallet. Please try again.");
-            return;  // Stop execution on transaction error
-        }
+        // Step 5: Create USDT associated token account
+        await editMessage(chatId, messageId, "Generating USDT token account...");
+        
+        const usdtTokenAccountPubkey = await Token.getAssociatedTokenAddress(
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+            TOKEN_PROGRAM_ID,
+            usdtMintAddress,
+            keypair.publicKey
+        );
 
-        // Step 5: Create USDT associated token account using the newly funded wallet as the fee payer
-        try {
-            await editMessage(chatId, messageId, "Generating USDT token account...");
-            
-            
-            // Retrieve the associated token account address for USDT
-            const usdtTokenAccountPubkey = await Token.getAssociatedTokenAddress(
-                ASSOCIATED_TOKEN_PROGRAM_ID,
-                TOKEN_PROGRAM_ID,
-                usdtMintAddress,
-                keypair.publicKey
-            );
-            
-            console.log(`USDT Token Account Address: ${usdtTokenAccountPubkey.toBase58()}`);
+        console.log(`USDT Token Account Address: ${usdtTokenAccountPubkey.toBase58()}`);
 
-            // Create the associated token account instruction
-            const usdtTokenAccountInstruction = Token.createAssociatedTokenAccountInstruction(
-                ASSOCIATED_TOKEN_PROGRAM_ID,
-                TOKEN_PROGRAM_ID,
-                usdtMintAddress,
-                usdtTokenAccountPubkey,
-                keypair.publicKey,  // The new wallet also owns the token account
-                keypair.publicKey   // The new wallet is the payer
-            );
+        const usdtTokenAccountInstruction = Token.createAssociatedTokenAccountInstruction(
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+            TOKEN_PROGRAM_ID,
+            usdtMintAddress,
+            usdtTokenAccountPubkey,
+            keypair.publicKey,  // The new wallet also owns the token account
+            keypair.publicKey   // The new wallet is the payer
+        );
 
-            const transaction = new solanaWeb3.Transaction().add(usdtTokenAccountInstruction);
-            transaction.feePayer = keypair.publicKey;
+        const usdtTransaction = new solanaWeb3.Transaction().add(usdtTokenAccountInstruction);
+        usdtTransaction.feePayer = keypair.publicKey;
+        const { blockhash: usdtBlockhash } = await connection.getLatestBlockhash();
+        usdtTransaction.recentBlockhash = usdtBlockhash;
 
-            const { blockhash } = await connection.getLatestBlockhash();
-            transaction.recentBlockhash = blockhash;
-
-            // Sign and send the transaction
-            const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [keypair]);
-            console.log(`USDT Token Account created. Transaction signature: ${signature}`);
-
-        } catch (usdtError) {
-            console.error(`USDT Token Account Error: ${usdtError.message}`);
-            await editMessage(chatId, messageId, "There was an error creating the USDT token account. Please try again.");
-            return;
-        }
+        const usdtSignature = await solanaWeb3.sendAndConfirmTransaction(connection, usdtTransaction, [keypair]);
+        console.log(`USDT Token Account created. Transaction signature: ${usdtSignature}`);
 
         // Step 6: Inform the user that the process is completed
         await editMessage(chatId, messageId, "Profile and wallet successfully created! Your wallet can now accept USDT.");
 
+        // Step 7: Delete the last message (success message) after 2 seconds
+        setTimeout(async () => {
+            await deleteMessage(chatId, messageId);
+        }, 2000); // 2 seconds delay before deleting the message
+
     } catch (error) {
-        // General error handling
-        console.error(`General Error: ${error.message}`);
-        await editMessage(chatId, messageId, "An unexpected error occurred. Please try again later.");
+        console.error(`Error occurred: ${error.message}`);
+
+        // If any error happens, delete the partially created account from the database
+        try {
+            const deleteQuery = 'DELETE FROM users WHERE telegram_id = $1';
+            await client.query(deleteQuery, [String(telegramId)]);
+            console.log(`Deleted user with telegram_id ${telegramId} from the database due to error.`);
+        } catch (dbError) {
+            console.error(`Error deleting user from database: ${dbError.message}`);
+        }
+
+        // Notify the user of the error
+        await editMessage(chatId, messageId, "There was an error creating your profile. Please try again.");
     }
 }
+
 
 
 
