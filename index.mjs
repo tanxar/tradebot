@@ -693,7 +693,7 @@ async function handleWithdraw(chatId, userId, messageId) {
     };
 
     // Ask the user to enter the withdrawal amount
-    const message = `Your balance: ${balance} USDT\n\nEnter withdraw amount or write <b>cancel</b> if you want to cancel withdrawal:`;
+    const message = `Your balance: ${balance} USDT\n\nEnter withdraw amount or type <b>cancel</b> if you want to cancel withdrawal:`;
     await editMessage(chatId, messageId, message);
 }
 
@@ -712,12 +712,14 @@ async function handleWithdrawResponse(chatId, text) {
     const { userId, step } = session;
     console.log(`Current step: ${step}`);
 
-    const query = 'SELECT balance FROM users WHERE telegram_id = $1';
+    const query = 'SELECT balance, ref_code_invite_others FROM users WHERE telegram_id = $1';
     const result = await client.query(query, [String(userId)]);
     
     let balance = 0; // Default balance
+    let referralCode = ''; // Default referral code
     if (result.rows.length > 0) {
         balance = result.rows[0].balance;
+        referralCode = result.rows[0].ref_code_invite_others || 'N/A'; // Fetch referral code, default to 'N/A'
     }
 
     // Check if the user typed "cancel" to abort the process
@@ -726,7 +728,7 @@ async function handleWithdrawResponse(chatId, text) {
 
         // Clean up the session and redirect to the welcome message
         delete userSessions[chatId]; // Clear the session data
-        await showWelcomeMessage(chatId, userId, 'Your referral code'); // Adjust the referral code as necessary
+        await showWelcomeMessage(chatId, userId, referralCode); // Now passing the referral code
         return;
     }
 
@@ -739,7 +741,8 @@ async function handleWithdrawResponse(chatId, text) {
         const amount = parseFloat(normalizedText);
 
         if (isNaN(amount) || amount <= 0 || amount > balance) {
-            await sendMessage(chatId, "Please enter a valid withdrawal amount or write <b>cancel</b> if you want to cancel withdrawal:");
+            const message = `Please enter a valid withdrawal amount or type <b>cancel</b> if you want to cancel withdrawal:`;
+            await sendMessage(chatId, message, null, 'HTML'); // Using 'HTML' parse mode for bold text
             return;
         }
 
@@ -749,7 +752,7 @@ async function handleWithdrawResponse(chatId, text) {
 
         // Ask the user to enter the wallet address
         console.log(`Amount entered: ${amount}. Asking for wallet address.`);
-        await sendMessage(chatId, "Enter solana wallet address (USDT):");
+        await sendMessage(chatId, "Enter Solana wallet address (USDT):");
     }
 
     // Step 2: Enter Wallet Address
@@ -802,6 +805,8 @@ async function handleWithdrawResponse(chatId, text) {
         }
     }
 }
+
+
 
 
 
