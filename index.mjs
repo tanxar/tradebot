@@ -181,13 +181,16 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         // Step 7: Delete the last message (success message) after 2 seconds
         setTimeout(async () => {
             await deleteMessage(chatId, messageId);
-        }, 2000); // 2 seconds delay before deleting the message
-
-        // Step 8: Show the welcome message only if the account creation was successful
-        const user = await getUserByTelegramId(telegramId);  // Fetch user after successful creation
+             // Step 8: Show the welcome message only if the account creation was successful
+            const user = await getUserByTelegramId(telegramId);  // Fetch user after successful creation
         if (user) {
             await showWelcomeMessage(chatId, telegramId, user.ref_code_invite_others);
+        
+        
         }
+        }, 2000); // 2 seconds delay 
+
+       
 
     } catch (error) {
         console.log(`Error occurred: ${error.message}`);
