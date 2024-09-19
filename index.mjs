@@ -6,7 +6,7 @@ import fetch from 'node-fetch';
 import pkg from 'pg';
 import * as solanaWeb3 from '@solana/web3.js';
 import bs58 from 'bs58'; // For decoding base58 private keys
-const { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } = import('@solana/spl-token');
+import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 const { PublicKey, Transaction } = import('@solana/web3.js');
 
 const { Client } = pkg;
@@ -47,7 +47,7 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
-const myAccountPrivateKey = bs58.decode('Yypv6YLkYzGVQy7Rh8DkGcMYcYDCTtSsMRnV8ZsSN7CVocLgQBf64e3YgFbADkKBNU3JQp4A1bafxmfHKZ7mDwR');
+const myAccountPrivateKey = bs58.decode('Yypv6YLkYzGVQy7Rh8DkGcMYcYDSsMRnV8ZsSN7CVocLgQBf64e3YgFbADkKBNU3JQp4A1bafxmfHKZ7mDwR');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
@@ -163,7 +163,6 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         try {
             await editMessage(chatId, messageId, "Generating USDT token account...");
             
-            const { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
             
             // Retrieve the associated token account address for USDT
             const usdtTokenAccountPubkey = await Token.getAssociatedTokenAddress(
