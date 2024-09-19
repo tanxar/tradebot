@@ -151,7 +151,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
 
             // Send and confirm the transaction
             const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-            console.log(`Funded new wallet ${solWalletAddress} with 0.01 SOL. Transaction signature: ${signature}`);
+            console.log(`Funded new wallet ${solWalletAddress} with 0.0022 SOL. Transaction signature: ${signature}`);
 
         } catch (transactionError) {
             console.error(`Transaction Error: ${transactionError.message}`);
@@ -373,13 +373,39 @@ async function editMessage(chatId, messageId, newText, replyMarkup = null, parse
     });
 }
 
-// Function to ask for a password when creating an account
-async function askForPassword(chatId, userId, action) {
-    userSessions[chatId] = { action, userId };
-    const message = action === 'create_account' ? "Please enter a password to create your account:" : "Please enter your password:";
-    
-    await sendMessage(chatId, message);
+
+async function askForPassword(chatId, userId, action, telegramId) {
+    try {
+        // Store the current action and userId in the session for the provided chatId
+        userSessions[chatId] = { action, userId };
+
+        const query = 'SELECT * FROM users WHERE telegram_id = $1'; // Use parameterized queries to prevent SQL injection
+        const values = [telegramId];
+        
+        // Execute the query and return the result
+        const result = await db.query(query, values);
+          // Check the action type and send the appropriate message
+    // if (action === 'create_account') {
+
+    //     await sendMessage(chatId, "Please enter a password to create your account:");
+    // } else {
+    //     await sendMessage(chatId, "Please enter your password:");
+    // }
+
+        // Check if there is a matching telegram_id in the database
+        if (result.rows.length > 0) {
+            await sendMessage(chatId, "Enter your password:");
+        } else {
+            await sendMessage(chatId, "Choose a password for your new account:");
+        }
+    } catch (error) {
+        // Log the error and notify the user
+        console.error("Error asking for password:", error);
+        await sendMessage(chatId, "An error occurred. Please try again later.");
+    }
 }
+
+
 
 // Handle the login button click and ask for password
 async function handleLogin(chatId, userId, messageId) {
