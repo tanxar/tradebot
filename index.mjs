@@ -223,7 +223,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
 
 // Function to delete a message via Telegram API
 async function deleteMessage(chatId, messageId) {
-    const url = `https://api.telegram.org/bot${TOKEN}/deleteMessage`;
+    const url = `https://api.telegram.org/bot${TOKENN}/deleteMessage`;
     const body = {
         chat_id: chatId,
         message_id: messageId,
@@ -354,7 +354,7 @@ async function restartBot(chatId, userId) {
 
 // Function to edit a message in response to a button click
 async function editMessage(chatId, messageId, newText, replyMarkup = null, parseMode = 'HTML') {
-    const url = `https://api.telegram.org/bot${TOKEN}/editMessageText`;
+    const url = `https://api.telegram.org/bot${TOKENN}/editMessageText`;
     const body = {
         chat_id: chatId,
         message_id: messageId,
@@ -634,7 +634,7 @@ async function showWelcomeMessage(chatId, userId, referralCode) {
         };
 
         // Send the message using Telegram API
-        await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+        await fetch(`https://api.telegram.org/bot${TOKENN}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(options),
@@ -925,7 +925,7 @@ async function handleLogout(chatId, userId, messageId) {
 
 // Function to send a message via Telegram
 async function sendMessage(chatId, text, replyMarkup = null, parseMode = 'Markdown') {
-    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    const url = `https://api.telegram.org/bot${TOKENN}/sendMessage`;
 
     const body = {
         chat_id: chatId,
