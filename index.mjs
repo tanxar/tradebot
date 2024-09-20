@@ -723,7 +723,7 @@ async function handleWithdraw(chatId, userId, messageId) {
         
         let balance = 0; // Default balance
         if (result.rows.length > 0) {
-            balance = result.rows[0].balance;
+            balance = result.rows[0].fake_balance;
         }
 
 
