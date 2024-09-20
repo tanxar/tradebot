@@ -307,8 +307,7 @@ async function checkForFunds(chatId, userId, messageId) {
            
             console.log(`Updated balance: ${WalletUsdtBalance} USDT`);
 
-            // Step 8: Update the database with the new balance, last checked balance, and total funds sent
-            const newCheckedBalance = balance;
+            // Step 8: Update the database 
             const updateQuery = `
                 UPDATE users_new
                 SET fake_balance = $1, total_user_funds = $2
