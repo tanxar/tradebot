@@ -1306,13 +1306,22 @@ async function handleReferralCodeResponse(chatId, text) {
 
     const { userId } = session;
 
-    // Handle 'cancel' command
+   // Check if the user wants to cancel the referral code input
     if (text.toLowerCase() === 'cancel') {
-        // Exit the referral code entering process
-        delete userSessions[chatId]; // Clear the session
-        await sendMessage(chatId, "Referral code entry cancelled.");
-        await restartBot(chatId, userId); // Restart the bot or show the main menu
-        return;
+        // If user types "cancel", inform them that the referral code entry is cancelled
+        const cancelMessageResponse = await sendMessage(chatId, "Referral code entry cancelled.");
+
+        // Wait 1 second, then delete the cancellation message
+        setTimeout(async () => {
+            await deleteMessage(chatId, cancelMessageResponse.result.message_id);
+
+            // Wait another second and restart the bot (return to the main menu)
+            setTimeout(async () => {
+                await restartBot(chatId, userId); // Restart the bot or show the main menu
+            }, 1000); // Wait another 1 second before restarting the bot
+        }, 1000);  // 1-second delay before deleting the cancellation message
+
+        return; // Exit the function after cancellation
     }
 
     try {
