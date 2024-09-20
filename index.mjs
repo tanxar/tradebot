@@ -1291,7 +1291,7 @@ async function updateAllUserBalances() {
 // Ask the user to enter their referral code
 async function handleEnterReferralCode(chatId, userId, messageId) {
     userSessions[chatId] = { action: 'enter_referral_code', userId };
-    const message = "Enter referral code:";
+    const message = "Enter referral code or type <b>cancel</b> if you don't have a valid code:";
     await editMessage(chatId, messageId, message);
 }
 
@@ -1322,7 +1322,7 @@ async function handleReferralCodeResponse(chatId, text) {
 
         // If referral code is not found
         if (refCodeResult.rows.length === 0) {
-            await sendMessage(chatId, "Code not valid. Enter another code or type 'cancel' if you don't have a valid code:");
+            await sendMessage(chatId, "Code not valid. Enter another code or type <b>cancel</b> if you don't have a valid code:");
             return;
         }
 
