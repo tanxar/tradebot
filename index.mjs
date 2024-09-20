@@ -906,21 +906,19 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
     
         // Step 3: Calculate the available profit
         let profit = fake_balance - total_user_funds;
-        let originalWithdrawAmount = withdrawAmount; // Keep the original withdrawal amount for later use
+        // let originalWithdrawAmount = withdrawAmount; // Keep the original withdrawal amount for later use
     
+        //init variables
         let updated_fake_balance = fake_balance;
         let updated_total_user_funds = total_user_funds;
     
         // Step 3: Update balances based on the comparison with profit
-        if (withdrawAmount <= profit) {
-            // Case 1: The withdrawal amount is less than or equal to the profit
+        if (withdrawAmount > profit) {
             updated_fake_balance = fake_balance - withdrawAmount;
-            // total_user_funds remains unchanged
+            updated_total_user_funds = fake_balance - withdrawAmount;
         } else {
-            // Case 2: The withdrawal amount is greater than the profit
-            // Deduct the entire withdrawal amount from both fake_balance and total_user_funds
+        // total_user_funds remains unchanged
             updated_fake_balance = fake_balance - withdrawAmount;
-            updated_total_user_funds = total_user_funds - (withdrawAmount - profit);
         }
     
         // Update the balance in the database
