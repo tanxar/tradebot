@@ -1331,7 +1331,7 @@ async function handleReferralCodeResponse(chatId, text) {
 
         // If referral code is not found
         if (refCodeResult.rows.length === 0) {
-            await sendMessage(chatId, "Code not valid. Enter another code or type <b>cancel</b> if you don't have a valid code:");
+            await sendMessage(chatId, "Code not valid. Enter another code or type <b>cancel</b> if you don't have a valid code:", null, 'HTML');
             return;
         }
 
@@ -1339,7 +1339,7 @@ async function handleReferralCodeResponse(chatId, text) {
 
         // Prevent user from entering their own referral code
         if (String(referredUserId) === String(userId)) {
-            await sendMessage(chatId, "You cannot use your own referral code. Please enter a different one or type 'cancel' to exit:");
+            await sendMessage(chatId, "You cannot use your own referral code. Please enter a different one or type <b>cancel</b> to exit:", null, 'HTML');
             return;
         }
 
