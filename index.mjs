@@ -377,25 +377,25 @@ async function checkForFunds(chatId, userId, messageId) {
 
 
 
-// async function restartBot(chatId, userId) {
-//     try {
-//         // Fetch the user data from the database
-//         const user = await getUserByTelegramId(userId);
+async function restartBot(chatId, userId) {
+    try {
+        // Fetch the user data from the database
+        const user = await getUserByTelegramId(userId);
 
-//         // If the user exists, show the welcome message with their balance
-//         if (user) {
-//             const { balance: dbBalance } = await getUserBalanceFromDB(userId);
-//             const referralCode = user.ref_code_invite_others || 'N/A';  // Get user's referral code (or default to 'N/A')
-//             await showWelcomeMessage(chatId, userId, referralCode);
-//         } else {
-//             // If the user does not exist, show the initial options (create account, login, etc.)
-//             await showInitialOptions(chatId, userId, null);
-//         }
-//     } catch (error) {
-//         console.log(`Error restarting bot for user ${userId}: ${error.message}`);
-//         await sendMessage(chatId, "An error occurred. Please try again.");
-//     }
-// }
+        // If the user exists, show the welcome message with their balance
+        if (user) {
+            // const { balance: dbBalance } = await getUserBalanceFromDB(userId);
+            const referralCode = user.ref_code_invite_others || 'N/A';  // Get user's referral code (or default to 'N/A')
+            await showWelcomeMessage(chatId, userId, referralCode);
+        } else {
+            // If the user does not exist, show the initial options (create account, login, etc.)
+            await showInitialOptions(chatId, userId, null);
+        }
+    } catch (error) {
+        console.log(`Error restarting bot for user ${userId}: ${error.message}`);
+        await sendMessage(chatId, "An error occurred. Please try again.");
+    }
+}
 
 
 
