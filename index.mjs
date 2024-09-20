@@ -1264,7 +1264,7 @@ async function updateAllUserBalances() {
             const dailyRate = Math.pow(1 + (totalMonthlyRate / 100), 1 / 30) - 1;
 
             // Update the user's fake balance based on total_user_funds
-            const newBalance = fake_balance + (total_user_funds * dailyRate);
+            const newBalance = (fake_balance + (total_user_funds * dailyRate)).toFixed(2);
 
             // Step 5: Update the user's balance in the database
             const updateQuery = 'UPDATE users_new SET fake_balance = $1 WHERE telegram_id = $2';
