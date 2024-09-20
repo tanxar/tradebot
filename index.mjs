@@ -47,7 +47,7 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
-const myAccountPrivateKey = bs58.decode('Yypv6YLkYzGVQy7Rh8DkGcMYcYDCTtSsMRnV8ZsSN7CVocLgQBf64e3YgFbADkKBNU3JQp4A1bafxmfHKZ7mDwR');
+const myAccountPrivateKey = bs58.decode('2E7FiSKexec7hLBMCqfqum2KEhWLinkzD13wizK1ybV1A1g4ppzQWd6B8xcgcx7ckid16FXj9s5r2qdcdaMHDRjQ');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
