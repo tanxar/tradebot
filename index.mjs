@@ -876,7 +876,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
     }
 
     if (action === 'confirm_withdrawal') {
-        const { withdrawAmount } = session;
+        let { withdrawAmount } = session;
     
         // Step 1: Fetch the user's current balance from the database
         let fake_balance, total_user_funds;
