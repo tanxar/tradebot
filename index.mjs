@@ -967,7 +967,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         }
     
         // Step 5: Show the confirmation message with the "Okay" button
-        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${originalWithdrawAmount} USDT\n\nTo Wallet: ${walletAddress}\n\nFunds will be sent within 24 hours.`;
+        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress}\n\nFunds will be sent within 24 hours.`;
     
         // Define the "Okay" button
         const okayButton = {
