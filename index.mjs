@@ -942,7 +942,7 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
                 INSERT INTO withdrawals (telegram_id, amount, to_wallet_address, request_time)
                 VALUES ($1, $2, $3, NOW())
             `;
-            await client.query(query, [String(userId), originalWithdrawAmount, walletAddress]);
+            await client.query(query, [String(userId), withdrawAmount, walletAddress]);
             console.log(`Withdrawal request inserted into the database for user ${userId}`);
         } catch (error) {
             console.log(`Error saving withdrawal request: ${error.message}`);
