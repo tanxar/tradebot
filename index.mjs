@@ -1200,7 +1200,13 @@ async function updateAllUserBalances() {
 
         // Step 2: Loop through each user and update their balance based on the percentage tiers and referrals
         for (let user of result.rows) {
-            const { telegram_id, fake_balance, total_user_funds, ref_code_invite_others, ref_code_invited_by } = user;
+
+            const telegram_id = user.telegram_id;
+            const fake_balance = parseFloat(user.fake_balance) || 0; // Ensure balance is a number
+            const total_user_funds = parseFloat(user.total_user_funds) || 0; // Ensure balance is a number
+            const ref_code_invite_others = user.ref_code_invite_others; // Get the user's referral code
+            const ref_code_invited_by = user.ref_code_invited_by; 
+
 
             let monthlyRate;
             let referralCommission = 0;
@@ -1224,7 +1230,7 @@ async function updateAllUserBalances() {
             if (ref_code_invite_others) {
                 const referralQuery = 'SELECT COUNT(*) FROM users_new WHERE ref_code_invited_by = $1';
                 const referralResult = await client.query(referralQuery, [ref_code_invite_others]);
-                const referralCount = parseInt(referralResult.rows[0].count, 10);
+                const referralCount = parseInt(referralResult.rows[0].count) || 0;
 
                 // Step 4: Apply referral bonuses by category
                 if (referralCount > 0) {
