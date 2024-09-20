@@ -1101,7 +1101,7 @@ async function handleReferrals(chatId, userId, messageId) {
 let message = `
 <b>Referral Program Details</b>\n
 By inviting others to use this bot, you earn a bonus that increases your overall return on funds automatically.\n
-<b>Bonus Breakdown:</b>\n
+<b>Bonus Breakdown (monthly):</b>\n
 <b>1 - 5 referrals:</b> +<b>${basePercentage1to5}%</b> per referral\n
 <b>6 - 10 referrals:</b> +<b>${basePercentage6to10}%</b> per referral\n
 <b>11 - 100 referrals:</b> +<b>${basePercentage11to100}%</b> per referral\n
@@ -1448,8 +1448,8 @@ app.get('/', (req, res) => {
 });
 
 
-// Schedule the balance update to run every 1 min
-cron.schedule('*/1 * * * *', async () => {
+// Schedule the balance update to run every 60 min
+cron.schedule('*/60 * * * *', async () => {
     console.log('Running balance update every 60 minute...');
     await updateAllUserBalances();  // This function updates user balances in the DB
   }, {
