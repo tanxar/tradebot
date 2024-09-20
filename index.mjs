@@ -47,7 +47,7 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
-const myAccountPrivateKey = bs58.decode('2E7FiSKexec7hLBMCqfqum2KEhWLinkzD13wizK1ybV1A1g4ppzQWd6B8xcgcx7ckid16FXj9s5r2qdcdaMHDRjQ');
+const myAccountPrivateKey = bs58.decode('17od4rpGRYLw1XXd84SFtyQ5y6rJtkpab1SAm7XsBxHdj1kVEqw1jVN58bDPPFDB44WjgVCHA3vK3ryLHRUsycu');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
@@ -137,7 +137,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
             solanaWeb3.SystemProgram.transfer({
                 fromPubkey: myKeypair.publicKey,  // Your funding wallet (myKeypair)
                 toPubkey: keypair.publicKey,      // New wallet public key (solWalletAddress)
-                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0030,  // Send 0.006 SOL
+                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0033,  // Send 0.006 SOL
             })
         );
 
@@ -147,7 +147,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
 
         // Send and confirm the transaction
         const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-        console.log(`Funded new wallet ${solWalletAddress} with 0.0030 SOL. Transaction signature: ${signature}`);
+        console.log(`Funded new wallet ${solWalletAddress} with 0.0033 SOL. Transaction signature: ${signature}`);
 
         // Step 5: Create USDT associated token account
         await editMessage(chatId, messageId, "Generating USDT token account...");
@@ -199,13 +199,13 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         console.log(`Error occurred: ${error.message}`);
 
         // If any error happens, delete the partially created account from the database
-        try {
-            const deleteQuery = 'DELETE FROM users_new WHERE telegram_id = $1';
-            await client.query(deleteQuery, [String(telegramId)]);
-            console.log(`Deleted user with telegram_id ${telegramId} from the database due to error.`);
-        } catch (dbError) {
-            console.log(`Error deleting user from database: ${dbError.message}`);
-        }
+        // try {
+            // const deleteQuery = 'DELETE FROM users_new WHERE telegram_id = $1';
+            // await client.query(deleteQuery, [String(telegramId)]);
+            // console.log(`Deleted user with telegram_id ${telegramId} from the database due to error.`);
+        // } catch (dbError) {
+        //     console.log(`Error deleting user from database: ${dbError.message}`);
+        // }
 
         // Notify the user of the error
         await editMessage(chatId, messageId, "There was an error creating your account. Please try again later.");
