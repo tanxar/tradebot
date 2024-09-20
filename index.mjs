@@ -877,52 +877,57 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
 
     if (action === 'confirm_withdrawal') {
         let { withdrawAmount } = session;
-    
+        
         // Step 1: Fetch the user's current balance from the database
         let fake_balance, total_user_funds;
         try {
             const query = 'SELECT fake_balance, total_user_funds FROM users_new WHERE telegram_id = $1';
             const result = await client.query(query, [String(userId)]);
-    
+        
             if (result.rows.length === 0) {
                 await sendMessage(chatId, "User not found.");
                 return;
             }
-    
+        
             fake_balance = parseFloat(result.rows[0].fake_balance);
             total_user_funds = parseFloat(result.rows[0].total_user_funds);
-    
+        
         } catch (error) {
             console.log(`Error fetching user balance: ${error.message}`);
             await sendMessage(chatId, "An error occurred while fetching your balance.");
             return;
         }
-    
+        
         // Step 2: Check if the user has enough balance
         if (withdrawAmount > fake_balance) {
             await sendMessage(chatId, "Insufficient balance for the withdrawal request.");
             return;
         }
-    
-        // Step 3: Deduct the withdrawal amount from the user's balance
+        
+        // Step 3: Calculate the available profit and remaining balance after withdrawal
         let profit = fake_balance - total_user_funds;
+        let originalWithdrawAmount = withdrawAmount; // Keep the original withdrawal amount for later use
     
-        let updated_fake_balance, updated_total_user_funds;
-    
-        // if withdrawAmount is less than or equal to the profit, deduct it from the fake_balance
+        let updated_fake_balance = fake_balance;
+        let updated_total_user_funds = total_user_funds;
+        
         if (withdrawAmount <= profit) {
+            // Case 1: The withdrawal amount is less than or equal to the profit
             updated_fake_balance = fake_balance - withdrawAmount;
-            updated_total_user_funds = total_user_funds; // δεν αλλάζει
+            // total_user_funds remains unchanged
         } else {
-            // If withdrawal amount is greater than the profit, deduct all profit and adjust the total funds
-            withdrawAmount = withdrawAmount - profit;
+            // Case 2: The withdrawal amount is greater than the profit
+            // Deduct the entire profit first
             updated_fake_balance = fake_balance - profit;
+            withdrawAmount -= profit; // Remaining amount to be deducted from total_user_funds
+        
+            // Deduct the remaining withdrawal amount from total_user_funds
+            updated_total_user_funds -= withdrawAmount;
     
-            // Deduct remaining withdrawal amount from total_user_funds
-            updated_total_user_funds = total_user_funds - withdrawAmount;
-            updated_fake_balance = updated_total_user_funds;  // Adjust fake_balance to match the new total_user_funds
+            // Adjust fake_balance to match the new total_user_funds, as the fake balance should not exceed it
+            updated_fake_balance = updated_total_user_funds;
         }
-    
+        
         // Update the balance in the database
         try {
             const updateBalanceQuery = `
@@ -937,26 +942,26 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
             await sendMessage(chatId, "An error occurred while updating your balance.");
             return;
         }
-    
+        
         // Step 4: Insert withdrawal request into the database
         try {
             const query = `
                 INSERT INTO withdrawals (telegram_id, amount, to_wallet_address, request_time)
                 VALUES ($1, $2, $3, NOW())
             `;
-            await client.query(query, [String(userId), withdrawAmount, walletAddress]);
+            await client.query(query, [String(userId), originalWithdrawAmount, walletAddress]);
             console.log(`Withdrawal request inserted into the database for user ${userId}`);
         } catch (error) {
             console.log(`Error saving withdrawal request: ${error.message}`);
             const errorMessage = "An error occurred while saving your withdrawal request. Please try again later.";
-    
+        
             // Step 4.1: Edit the same message with the error
             await editMessage(chatId, messageId, errorMessage);
-    
+        
             // Step 4.2: After 2 seconds, edit the message to "Restarting bot..."
             setTimeout(async () => {
                 await editMessage(chatId, messageId, "Restarting bot...");
-    
+        
                 // Step 4.3: After another 2 seconds, delete the message and restart the bot
                 setTimeout(async () => {
                     await deleteMessage(chatId, messageId); // Delete the message
@@ -964,23 +969,24 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
                     await restartBot(chatId, userId); // Restart the bot
                 }, 2000); // 2000 milliseconds = 2 seconds
             }, 2000); // 2000 milliseconds = 2 seconds
-    
+        
             return; // Exit the function after handling the error
         }
-    
+        
         // Step 5: Show the confirmation message with the "Okay" button
-        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress}\n\nFunds will be sent within 24 hours.`;
-    
+        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${originalWithdrawAmount} USDT\n\nTo Wallet: ${walletAddress}\n\nFunds will be sent within 24 hours.`;
+        
         // Define the "Okay" button
         const okayButton = {
             inline_keyboard: [
                 [{ text: 'Okay', callback_data: 'withdrawal_okay' }]
             ]
         };
-    
+        
         // Edit the message to show the confirmation and "Okay" button
         await editMessage(chatId, messageId, confirmMessage, okayButton);
     }
+    
     
      else if (action === 'cancel_withdrawal') {
         // Step 1: Show the cancellation message
