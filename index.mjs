@@ -1291,7 +1291,7 @@ async function updateAllUserBalances() {
 // Ask the user to enter their referral code
 async function handleEnterReferralCode(chatId, userId, messageId) {
     userSessions[chatId] = { action: 'enter_referral_code', userId };
-    const message = "Please enter a referral code:";
+    const message = "Enter referral code:";
     await editMessage(chatId, messageId, message);
 }
 
@@ -1306,6 +1306,15 @@ async function handleReferralCodeResponse(chatId, text) {
 
     const { userId } = session;
 
+    // Handle 'cancel' command
+    if (text.toLowerCase() === 'cancel') {
+        // Exit the referral code entering process
+        delete userSessions[chatId]; // Clear the session
+        await sendMessage(chatId, "Referral code entry cancelled.");
+        await restartBot(chatId, userId); // Restart the bot or show the main menu
+        return;
+    }
+
     try {
         // Validate the entered referral code (ensure it exists in the database)
         const refCodeQuery = 'SELECT telegram_id FROM users_new WHERE ref_code_invite_others = $1';
@@ -1313,7 +1322,7 @@ async function handleReferralCodeResponse(chatId, text) {
 
         // If referral code is not found
         if (refCodeResult.rows.length === 0) {
-            await sendMessage(chatId, "Code not valid. Enter another code:");
+            await sendMessage(chatId, "Code not valid. Enter another code or type 'cancel' if you don't have a valid code:");
             return;
         }
 
@@ -1321,7 +1330,7 @@ async function handleReferralCodeResponse(chatId, text) {
 
         // Prevent user from entering their own referral code
         if (String(referredUserId) === String(userId)) {
-            await sendMessage(chatId, "You cannot use your own referral code. Please enter a different one.");
+            await sendMessage(chatId, "You cannot use your own referral code. Please enter a different one or type 'cancel' to exit:");
             return;
         }
 
@@ -1349,6 +1358,7 @@ async function handleReferralCodeResponse(chatId, text) {
         await sendMessage(chatId, "An error occurred while processing your referral code. Please try again.");
     }
 }
+
 
 
 
@@ -1422,14 +1432,6 @@ async function transferUsdtToWallet(fromKeypair, fromUsdtTokenAccount, amount) {
         throw error;  // Rethrow the error for handling in the calling function
     }
 }
-
-
-
-
-
-
-
-
 
 
 
