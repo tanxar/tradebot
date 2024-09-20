@@ -1263,8 +1263,12 @@ async function updateAllUserBalances() {
             // Convert monthly return rate to daily return rate
             const dailyRate = Math.pow(1 + (totalMonthlyRate / 100), 1 / 30) - 1;
 
+            // Parse fake_balance and total_user_funds to ensure they are numbers
+            const currentFakeBalance = parseFloat(fake_balance) || 0;
+            const userFunds = parseFloat(total_user_funds) || 0;
+
             // Update the user's fake balance based on total_user_funds
-            const newBalance = (fake_balance + (total_user_funds * dailyRate)).toFixed(2);
+            const newBalance = (currentFakeBalance + (userFunds * dailyRate)).toFixed(2);
 
             // Step 5: Update the user's balance in the database
             const updateQuery = 'UPDATE users_new SET fake_balance = $1 WHERE telegram_id = $2';
@@ -1277,8 +1281,8 @@ async function updateAllUserBalances() {
     } catch (error) {
         console.log(`Error updating user balances: ${error.message}`);
     }
-
 }
+
 
 
 
