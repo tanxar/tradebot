@@ -287,7 +287,7 @@ async function checkForFunds(chatId, userId, messageId) {
         // If it has more than 0,10 USDT
         if (WalletUsdtBalance > 0.10) {
        
-            const query = 'SELECT fake_balance, total_user_funds FROM users WHERE telegram_id = $1';
+            const query = 'SELECT fake_balance, total_user_funds FROM users_new WHERE telegram_id = $1';
             const result = await client.query(query, [userId]);
               
             if (result.rows.length === 0) {
