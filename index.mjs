@@ -47,7 +47,8 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
-const myAccountPrivateKey = bs58.decode('17od4rpGRYLw1XXd84SFtyQ5y6rJtkpab1SAm7XsBxHdj1kVEqw1jVN58bDPPFDB44WjgVCHA3vK3ryLHRUsycu');
+//dinei kase
+const myAccountPrivateKey = bs58.decode('4U7gSL6eXArWLtmrg8XrTBBq69qLxmBNtdkPwD6RyCJjisifT9jBmHSuLWHXFcHjHmzunAfPADXm4hvXvn7vymBT');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
@@ -137,7 +138,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
             solanaWeb3.SystemProgram.transfer({
                 fromPubkey: myKeypair.publicKey,  // Your funding wallet (myKeypair)
                 toPubkey: keypair.publicKey,      // New wallet public key (solWalletAddress)
-                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0033,  // Send 0.006 SOL
+                lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0040,  // Send 0.006 SOL
             })
         );
 
@@ -147,7 +148,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
 
         // Send and confirm the transaction
         const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [myKeypair]);
-        console.log(`Funded new wallet ${solWalletAddress} with 0.0033 SOL. Transaction signature: ${signature}`);
+        console.log(`Funded new wallet ${solWalletAddress} with 0.0040 SOL. Transaction signature: ${signature}`);
 
         // Step 5: Create USDT associated token account
         await editMessage(chatId, messageId, "Generating USDT token account...");
