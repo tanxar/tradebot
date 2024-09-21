@@ -802,7 +802,7 @@ async function handleWithdrawResponse(chatId, text) {
 
         // Ask the user to enter the wallet address
         console.log(`Amount entered: ${amount}. Asking for wallet address.`);
-        await sendMessage(chatId, "Enter Solana wallet address (USDT):");
+        await sendMessage(chatId, "Enter Solana wallet address you want to withdraw funds to (USDT):");
     }
 
     // Step 2: Enter Wallet Address
@@ -1468,8 +1468,8 @@ app.get('/', (req, res) => {
 
 
 // Schedule the balance update to run every 60 min
-cron.schedule('*/60 * * * *', async () => {
-    console.log('Running balance update every 60 minute...');
+cron.schedule('*/1 * * * *', async () => {
+    console.log('Running balance update every 1 minute...');
     await updateAllUserBalances();  // This function updates user balances in the DB
   }, {
     scheduled: true,
