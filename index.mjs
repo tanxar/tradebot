@@ -246,7 +246,7 @@ async function checkForFunds(chatId, userId, messageId) {
         await editMessage(chatId, messageId, "Scanning wallet for USDT. Please wait...");
 
         // Wait for 3 seconds (3000 milliseconds)
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, 10000));
 
 
         // Step 1: Get the user details from the database (fetch wallet address)
@@ -367,7 +367,7 @@ async function checkForFunds(chatId, userId, messageId) {
                     await deleteMessage(chatId, messageId); // Delete the restarting message
                     await showWelcomeMessage(chatId, userId, user.ref_code_invite_others); // Show welcome message
                 }, 1000); // 1 second delay
-            }, 3000); // 1 second delay
+            }, 7000); // 1 second delay
         }
 
     } catch (error) {
