@@ -768,7 +768,7 @@ async function handleWithdrawResponse(chatId, text) {
     let balance = 0; // Default balance
     let referralCode = ''; // Default referral code
     if (result.rows.length > 0) {
-        balance = result.rows[0].balance;
+        balance = result.rows[0].fake_balance;
         referralCode = result.rows[0].ref_code_invite_others || 'N/A'; // Fetch referral code, default to 'N/A'
     }
 
