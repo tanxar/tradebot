@@ -693,21 +693,8 @@ async function showWelcomeMessage(chatId, userId, referralCode) {
         }
 
         // Compose the welcome message with the user's balance
-        const message = `Your balance: ${balance} USDT
+        const message = `\nYour balance: ${balance} USDT\n\n<b>Monthly Returns Based on Added Funds:</b>\n1-99 USDT: ~12% monthly / ~0.4% daily\n100-499 USDT: ~17% monthly / ~0.566% daily\n500-999 USDT: ~21% monthly / ~0.7% daily\n1000-4999 USDT: ~27% monthly / ~0.9% daily\n5000+ USDT: ~31% monthly / ~1.033% daily\n\n<b>Referral Program:</b>\nYou can increase your returns by referring others to the bot. Each referral can provide an additional percentage to your monthly returns.\n\nReferral code: <code>${referralCode}</code> (click to copy)`;
 
-        <b>Monthly Returns Based on Added Funds:</b>
-        
-        1-99 USDT: 12% monthly / 0.4% daily
-        100-499 USDT: 17% monthly / 0.566% daily
-        500-999 USDT: 21% monthly / 0.7% daily
-        1000-4999 USDT: 27% monthly / 0.9% daily
-        5000+ USDT: 31% monthly / 1.033% daily
-        
-        <b>Referral Program:</b>
-        You can increase your returns by referring others to the bot. Each referral can provide an additional percentage to your monthly returns.
-        
-        Referral code: <code>${referralCode}</code> (click to copy)`;
-        
         // Define the inline keyboard for options
         const options = {
             chat_id: chatId,
