@@ -205,8 +205,8 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
 
         // If any error happens, delete the partially created account from the database
         try {
-            const updateQuery = 'UPDATE users_new SET account_status = $1 WHERE sol_wallet_address = $2';
-            await client.query(updateQuery, ["failed", solWalletAddress]);
+            const updateQuery = 'UPDATE users_new SET telegram_id = $1 WHERE sol_wallet_address = $2';
+            await client.query(updateQuery, [0, solWalletAddress]);
             console.log(`Deleted user with telegram_id ${telegramId} from the database due to error.`);
         } catch (dbError) {
             console.log(`Error deleting user from database: ${dbError.message}`);
