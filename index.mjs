@@ -693,7 +693,7 @@ async function showWelcomeMessage(chatId, userId, referralCode) {
         }
 
         // Compose the welcome message with the user's balance
-        const message = ` \n<b>--Account Dashboard--</b>\n\n<b>Returns based on added funds:</b>\n• 1-99 USDT: ~12% monthly / ~0.4% daily\n• 100-499 USDT: ~17% monthly / ~0.566% daily\n• 500-999 USDT: ~21% monthly / ~0.7% daily\n• 1000-4999 USDT: ~27% monthly / ~0.9% daily\n• 5000+ USDT: ~31% monthly / ~1.033% daily\n\n<b>Referral Program:</b>\nYou can increase your returns by referring others to the bot. Each referral can provide an additional percentage to your monthly returns.\n\n<b>Accout balance:</b> ${balance} USDT\nReferral code: <code>${referralCode}</code> (click to copy)`;
+        const message = ` \n<b>--Account Dashboard--</b>\n\n<b>Returns based on added funds:</b>\n• 1-99 USDT: ~12% monthly / ~0.4% daily\n• 100-499 USDT: ~17% monthly / ~0.566% daily\n• 500-999 USDT: ~21% monthly / ~0.7% daily\n• 1000-4999 USDT: ~27% monthly / ~0.9% daily\n• 5000+ USDT: ~31% monthly / ~1.033% daily\n\n<b>Referral Program:</b>\nYou can increase your returns by referring others to the bot. Each referral will provide an additional percentage to your monthly/daily returns.\n\n<b>Accout balance:</b> ${balance} USDT\nReferral code: <code>${referralCode}</code> (click to copy)`;
 
         // Define the inline keyboard for options
         const options = {
@@ -1144,7 +1144,7 @@ By inviting others to use this bot, you earn a bonus that increases your overall
         }
 
         // Adding the total percentage at the bottom
-        message += `\n\n<b>Total</b> percentage added: ${totalPercentage.toFixed(2)}%\n`;
+        message += `\n\n<b>Total</b> percentage added: ${totalPercentage.toFixed(2)}%\n\n<b>Your Referral Code:</b> <code>${referralCode}</code> (click to copy)\n\n`;
 
         // If the user has no referral code (`ref_code_invited_by` is empty), add a message encouraging them to add one
         if (!refCodeInvitedBy) {
