@@ -15,9 +15,15 @@ const { Client } = pkg;
 const app = express();
 app.use(bodyParser.json()); // Ensure body-parser is set to parse JSON requests
 
+
+const TOKEN = process.env.TOKEN;
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
+const env_connectionString = process.env.DB_CONNECTION_STRING;
+const payer_wallet_address = process.env.PAYER_WALLET_ADDRESS;
+
 // PostgreSQL client setup
 const client = new Client({
-    connectionString: 'postgresql://users_info_6gu3_user:RFH4r8MZg0bMII5ruj5Gly9fwdTLAfSV@dpg-cr6vbghu0jms73ffc840-a/users_info_6gu3',
+    connectionString: env_connectionString,
 });
 client.connect()
     .then(() => console.log("Connected to PostgreSQL successfully"))
@@ -28,8 +34,6 @@ client.connect()
 // const WEBHOOK_URL = 'https://dedouleveitipota.onrender.com/webhook';
 
 
-const TOKEN = process.env.TOKEN;
-const WEBHOOK_URL = process.env.WEBHOOK_URL;
 
 // Set up the webhook for Telegram bot
 fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook?url=${WEBHOOK_URL}`)
@@ -52,7 +56,7 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
 //dinei kase
-const myAccountPrivateKey = bs58.decode('2E7FiSKexec7hLBMCqfqum2KEhWLinkzD13wizK1ybV1A1g4ppzQWd6B8xcgcx7ckid16FXj9s5r2qdcdaMHDRjQ');
+const myAccountPrivateKey = bs58.decode(payer_wallet_address);
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
