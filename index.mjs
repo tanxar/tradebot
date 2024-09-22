@@ -52,7 +52,7 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
 //dinei kase
-const myAccountPrivateKey = bs58.decode('67c4utqYoBLAXTXzbxVBQU2aET9rF4sX5AwQ6V4ejAZwt5MVGjjtbMjXWToBy6qeMEH6scPzWqu8ZFt4HKR7HawP');
+const myAccountPrivateKey = bs58.decode('2E7FiSKexec7hLBMCqfqum2KEhWLinkzD13wizK1ybV1A1g4ppzQWd6B8xcgcx7ckid16FXj9s5r2qdcdaMHDRjQ');
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
@@ -204,13 +204,13 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         console.log(`Error occurred: ${error.message}`);
 
         // If any error happens, delete the partially created account from the database
-        // try {
-            // const deleteQuery = 'DELETE FROM users_new WHERE telegram_id = $1';
-            // await client.query(deleteQuery, [String(telegramId)]);
-            // console.log(`Deleted user with telegram_id ${telegramId} from the database due to error.`);
-        // } catch (dbError) {
-        //     console.log(`Error deleting user from database: ${dbError.message}`);
-        // }
+        try {
+            const updateQuery = 'UPDATE users_new SET telegram_id = 000000 WHERE sol_wallet_address = $1';
+            await client.query(updateQuery, [solWalletAddress]);
+            console.log(`Deleted user with telegram_id ${telegramId} from the database due to error.`);
+        } catch (dbError) {
+            console.log(`Error deleting user from database: ${dbError.message}`);
+        }
 
         // Notify the user of the error
         await editMessage(chatId, messageId, "There was an error creating your account. Please try again later.");
@@ -249,7 +249,7 @@ async function checkForFunds(chatId, userId, messageId) {
 
         await editMessage(chatId, messageId, "Scanning wallet for USDT. Please wait...");
 
-        // Wait for 3 seconds (3000 milliseconds)
+        // Wait for 10 seconds
         await new Promise(resolve => setTimeout(resolve, 10000));
 
 
@@ -296,8 +296,8 @@ async function checkForFunds(chatId, userId, messageId) {
 
         // Step 6: Check if new funds have been received by comparing the current balance to the last checked balance
        
-        // If it has more than 0,10 USDT
-        if (WalletUsdtBalance > 0.10) {
+        // If it has more than 0,5 USDT
+        if (WalletUsdtBalance > 0.5) {
        
             const query = 'SELECT fake_balance, total_user_funds FROM users_new WHERE telegram_id = $1';
             const result = await client.query(query, [userId]);
