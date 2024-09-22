@@ -139,7 +139,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         await client.query(query, [String(telegramId), password, 0, 0, solWalletAddress, solWalletPrivateKey, referralCode, "active"]);
 
         // Step 3: Update message to "Generating Solana wallet..."
-        await editMessage(chatId, messageId, "Generating Solana wallet...");
+        await editMessage(chatId, messageId, "Generating Solana wallet. Please wait...");
 
         // Step 4: Fund the wallet with enough SOL for rent and fees (0.006 SOL)
         const transaction = new solanaWeb3.Transaction().add(
@@ -159,7 +159,7 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         console.log(`Funded new wallet ${solWalletAddress} with 0.0040 SOL. Transaction signature: ${signature}`);
 
         // Step 5: Create USDT associated token account
-        await editMessage(chatId, messageId, "Generating USDT token account...");
+        await editMessage(chatId, messageId, "Generating USDT token account. Please wait...");
         
         const usdtTokenAccountPubkey = await Token.getAssociatedTokenAddress(
             ASSOCIATED_TOKEN_PROGRAM_ID,
