@@ -19,7 +19,7 @@ app.use(bodyParser.json()); // Ensure body-parser is set to parse JSON requests
 const TOKEN = process.env.TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const env_connectionString = process.env.DB_CONNECTION_STRING;
-const payer_wallet_address = process.env.PAYER_WALLET_ADDRESS;
+const payer_wallet_private_key = process.env.PAYER_WALLET_PRIVATE_KEY;
 
 // PostgreSQL client setup
 const client = new Client({
@@ -56,7 +56,7 @@ const usdtMintAddress = new solanaWeb3.PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY
 // Your Solana private key (converted from base58)
 // MAKE SURE THE WALLET ONLY HAS SOL, NOT USDT tokens etc.
 //dinei kase
-const myAccountPrivateKey = bs58.decode(payer_wallet_address);
+const myAccountPrivateKey = bs58.decode(payer_wallet_private_key);
 const myKeypair = solanaWeb3.Keypair.fromSecretKey(myAccountPrivateKey);
 
 
