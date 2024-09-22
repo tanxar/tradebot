@@ -131,8 +131,8 @@ async function createUserAndFundWallet(telegramId, password, referralCode, chatI
         await editMessage(chatId, messageId, "Creating your profile...");
 
         // Step 2: Insert the new user into the database
-        const query = 'INSERT INTO users_new (telegram_id, password, total_user_funds, fake_balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others, account_status) VALUES ($1, $2, $3, $4, $5, $6, $7, active)';
-        await client.query(query, [String(telegramId), password, 0, 0, solWalletAddress, solWalletPrivateKey, referralCode]);
+        const query = 'INSERT INTO users_new (telegram_id, password, total_user_funds, fake_balance, sol_wallet_address, sol_wallet_private_key, ref_code_invite_others, account_status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)';
+        await client.query(query, [String(telegramId), password, 0, 0, solWalletAddress, solWalletPrivateKey, referralCode, "active"]);
 
         // Step 3: Update message to "Generating Solana wallet..."
         await editMessage(chatId, messageId, "Generating Solana wallet...");
